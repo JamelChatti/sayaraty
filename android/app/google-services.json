@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "352121150280",
+    "project_id": "sayaraty-ab8db",
+    "storage_bucket": "sayaraty-ab8db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352121150280:android:8eb7a5e6ff3763eb92f17d",
+        "android_client_info": {
+          "package_name": "com.example.sayaraty"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1bKVJ1YkbmRf2iz7Z-aIKYxhUaWO-gUE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

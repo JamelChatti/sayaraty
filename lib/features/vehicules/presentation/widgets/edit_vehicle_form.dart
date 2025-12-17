@@ -1,36 +1,12 @@
-// lib/features/vehicles/presentation/screens/edit_vehicle_screen.dart
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sayaraty/features/vehicules/presentation/widgets/vehicle_form.dart';
 
 import '../../application/vehicle_service.dart';
 import '../../domain/models/vehicule_model.dart';
-import '../widgets/vehicle_form.dart';
 
-// 👇 Widget principal
-class EditVehicleScreen extends ConsumerWidget {
-  final String vehicleId;
-
-  const EditVehicleScreen({super.key, required this.vehicleId});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final vehicleAsync = ref.watch(vehicleByIdStreamProvider(vehicleId));
-
-    return vehicleAsync.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, _) => Scaffold(body: Center(child: Text('Erreur: $err'))),
-      data: (vehicle) {
-        if (vehicle == null) {
-          return Scaffold(body: Center(child: Text('Véhicule non trouvé')));
-        }
-        return _EditVehicleForm(vehicle: vehicle); // ✅ maintenant défini
-      },
-    );
-  }
-}
-
-// 👇 Widget privé pour le formulaire (StatefulWidget)
 class _EditVehicleForm extends ConsumerStatefulWidget {
   final Vehicle vehicle;
   const _EditVehicleForm({required this.vehicle});
@@ -96,6 +72,7 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
                   ],
                 ),
               );
+
               if (confirm == true) {
                 await ref.read(vehicleServiceProvider).deleteVehicle(widget.vehicle.id);
                 if (context.mounted) context.push('/vehicles');

@@ -15,7 +15,7 @@ dependencies {
 
 android {
     namespace = "com.example.sayaraty"
-    compileSdk = 35
+    compileSdk = 36
 
     // ✅ Utilise directement la version NDK requise
     ndkVersion = "27.0.12077973"
@@ -31,7 +31,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.sayaraty"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"

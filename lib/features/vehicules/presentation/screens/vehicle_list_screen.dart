@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../application/vehicle_providers.dart';
-import '../../application/vehicle_service.dart';
+import '../../application/vehicle_service.dart' hide vehiclesStreamProvider;
 import '../../domain/models/vehicule_model.dart';
 
 
@@ -36,6 +36,32 @@ class _VehicleListBody extends ConsumerWidget {
 
   const _VehicleListBody({required this.userId});
 
+  Future<void> _showDeleteDialog(BuildContext context, WidgetRef ref, String vehicleId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer ce véhicule ?'),
+        content: const Text('Toutes les interventions liées seront aussi supprimées.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await ref.read(vehicleServiceProvider).deleteVehicle(vehicleId);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Véhicule supprimé')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vehiclesAsync = ref.watch(vehiclesStreamProvider(userId));
@@ -46,7 +72,19 @@ class _VehicleListBody extends ConsumerWidget {
       data: (vehicles) {
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Mes véhicules'),
+            title: Row(
+              children: [
+                Container(
+                  color: const Color(0xFFF5F7FB),
+                  child: Image.asset(
+                    'assets/images/logo_sayaraty.png',
+                    height: 65,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('Sayaraty'),
+              ],
+            ),
             actions: [IconButton(
               icon: const Icon(Icons.settings),
               onPressed: () => context.push('/settings'),
@@ -95,14 +133,31 @@ class _VehicleListBody extends ConsumerWidget {
                     );
                   }
                 },
-                child: ListTile(
+                child:ListTile(
                   title: Text(title),
                   subtitle: Text(subtitle),
-                  trailing: Icon(_getVehicleIcon(vehicle)),
+                  leading: Icon(_getVehicleIcon(vehicle)),
                   onTap: () => context.push('/maintenance', extra: {
                     'vehicleId': vehicle.id,
-                    'vehicleName': '${vehicle.brand} ${vehicle.model}',
+                    'vehicleName': title,
                   }),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        context.push('/vehicles/edit/${vehicle.id}');
+                      } else if (value == 'delete') {
+                        _showDeleteDialog(context, ref, vehicle.id);
+                      } else if (value == 'details') {
+                        // 👇 Naviguez vers les détails
+                        context.push('/vehicles/detail/${vehicle.id}', extra: vehicle);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+                      const PopupMenuItem(value: 'details', child: Text('Voir les détails')), // ✅ Ajouté
+                      const PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+                    ],
+                  ),
                 ),
               );
             },

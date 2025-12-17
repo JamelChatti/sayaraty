@@ -77,6 +77,8 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
             technicalInspectionExpiry: _inspectionExpiry,
             taxExpiry: _taxExpiry,
             createdAt: DateTime.now(),
+            attachments: [],
+            sharedWith: [],
           );
 
 

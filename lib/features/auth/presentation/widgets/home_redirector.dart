@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart'; // 🔑 Importe GoRouter
 
 // Provider
 import '../../../auth/application/auth_state_notifier.dart';
+import '../../../vehicules/presentation/screens/pro_vehicle_list_screen.dart';
 import '../screens/company_admin_home_screen.dart';
 // Écrans (import corrects)
 import '../screens/owner_home_screen.dart';
-import '../screens/pro_home_screen.dart';
 
 class HomeRedirector extends ConsumerWidget {
   const HomeRedirector({super.key});
@@ -33,7 +33,7 @@ class HomeRedirector extends ConsumerWidget {
           case 'owner':
             return OwnerHomeScreen(user: user);
           case 'pro':
-            return ProHomeScreen(user: user);
+            return ProVehicleListScreen();
           case 'company_admin':
           case 'employee':
             return CompanyAdminHomeScreen(user: user);

@@ -5,9 +5,8 @@ import 'package:go_router/go_router.dart'; // 🔑 Importe GoRouter
 // Provider
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../vehicules/presentation/screens/pro_vehicle_list_screen.dart';
+import '../../../vehicules/presentation/screens/vehicle_list_screen.dart';
 import '../screens/company_admin_home_screen.dart';
-// Écrans (import corrects)
-import '../screens/owner_home_screen.dart';
 
 class HomeRedirector extends ConsumerWidget {
   const HomeRedirector({super.key});
@@ -31,7 +30,7 @@ class HomeRedirector extends ConsumerWidget {
         // ✅ Retourne le bon écran en fonction du rôle
         switch (user.role) {
           case 'owner':
-            return OwnerHomeScreen(user: user);
+            return VehicleListScreen();
           case 'pro':
             return ProVehicleListScreen();
           case 'company_admin':

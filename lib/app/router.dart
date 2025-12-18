@@ -133,7 +133,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           if (vehicle == null) {
             return const Scaffold(body: Center(child: Text('Véhicule non trouvé')));
           }
-          return AttachmentSection(vehicleId: vehicle.id, initialAttachments: [],); // 👈 Vous devrez créer AttachedScreen
+          return AttachmentSection(vehicleId: vehicle.id, ); // 👈 Vous devrez créer AttachedScreen
         },
       ),
       GoRoute(

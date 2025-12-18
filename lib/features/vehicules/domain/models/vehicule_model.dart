@@ -24,6 +24,7 @@ class Vehicle {
   final DateTime? updatedAt;
   final List<String> attachments;
   final List<String> sharedWith;
+  final String? mainPhotoUrl;
 
   Vehicle({
     required this.id,
@@ -41,6 +42,7 @@ class Vehicle {
     this.updatedAt,
   this.attachments = const [],
     required this.sharedWith,
+    this.mainPhotoUrl,
   });
 
   // ----------------------------
@@ -86,6 +88,7 @@ class Vehicle {
       updatedAt: _toDate(map['updatedAt']),
       attachments: List<String>.from(map['attachments'] ?? []),
       sharedWith: List<String>.from(map['sharedWith'] ?? []),
+      mainPhotoUrl: map['mainPhotoUrl'] as String?,
     );
   }
 
@@ -105,6 +108,7 @@ class Vehicle {
       'updatedAt': updatedAt,
       'attachments': attachments,
       'sharedWith': sharedWith,
+      'mainPhotoUrl': mainPhotoUrl,
     };
   }
 }
@@ -130,6 +134,7 @@ extension VehicleCopyWith on Vehicle {
     DateTime? updatedAt,
     List<String>? attachments,
     List<String>? sharedWith,
+    String? mainPhotoUrl,
   }) {
     return Vehicle(
       id: id ?? this.id,
@@ -148,7 +153,8 @@ extension VehicleCopyWith on Vehicle {
       updatedAt: updatedAt ?? this.updatedAt,
       attachments: attachments ?? this.attachments,
         sharedWith: sharedWith ?? this.sharedWith,
-      
+      mainPhotoUrl: mainPhotoUrl ?? this.mainPhotoUrl,
+
     );
   }
 }

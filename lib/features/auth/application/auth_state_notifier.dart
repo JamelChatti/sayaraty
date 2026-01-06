@@ -1,33 +1,69 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../domain/models/user_model.dart';
 import 'auth_service.dart';
 
-/// Provider qui expose l'état d'authentification en temps réel
-final authStateProvider = StreamProvider<AppUser?>((ref) {
-  // Écoute le stream d'utilisateur depuis AuthService
-  return ref.watch(authServiceProvider).user;
-});
 
-class AuthStateNotifier extends AsyncNotifier<AppUser?> {
-  @override
-  FutureOr<AppUser?> build() {
-    // Écouter l'état de l'utilisateur
-    ref.onDispose(() {
-      // Optionnel : nettoyer les écouteurs si besoin
-    });
-    return _loadUser();
+// Nouveau StateNotifier simplifié et plus stable
+class AuthStateNotifier extends StateNotifier<AsyncValue<AppUser?>> {
+  final Ref ref;
+  StreamSubscription<AppUser?>? _userSubscription;
+
+  AuthStateNotifier(this.ref) : super(const AsyncLoading()) {
+    _init();
   }
 
-  Future<AppUser?> _loadUser() async {
-    final userStream = ref.read(authServiceProvider).user;
-    final subscription = userStream.listen((user) {
-      state = AsyncData(user);
-    });
-    ref.onDispose(subscription.cancel);
-    // Retourne la valeur initiale
-    final initialUser = await userStream.first;
-    return initialUser;
+  void _init() {
+    // Écouter le stream d'authentification
+    _userSubscription = ref.read(authServiceProvider).user.listen(
+          (user) {
+        state = AsyncData(user);
+      },
+      onError: (error, stackTrace) {
+        state = AsyncError(error, stackTrace);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _userSubscription?.cancel();
+    super.dispose();
+  }
+
+  // Méthodes pour les actions d'authentification
+  Future<void> signOut() async {
+    try {
+      await ref.read(authServiceProvider).signOut();
+    } catch (e) {
+      state = AsyncError(e, StackTrace.current);
+    }
+  }
+
+  Future<String?> signIn(String email, String password) async {
+    return await ref.read(authServiceProvider).signIn(email, password);
   }
 }
+
+// Provider pour le StateNotifier
+final authStateNotifierProvider = StateNotifierProvider<AuthStateNotifier, AsyncValue<AppUser?>>(
+      (ref) => AuthStateNotifier(ref),
+);
+
+// Provider pour l'utilisateur actuel (plus simple à utiliser)
+final currentUserProvider = Provider<AppUser?>((ref) {
+  final authState = ref.watch(authStateNotifierProvider);
+  return authState.when(
+    data: (user) => user,
+    loading: () => null,
+    error: (_, __) => null,
+  );
+});
+
+// Provider pour savoir si l'utilisateur est connecté
+final isAuthenticatedProvider = Provider<bool>((ref) {
+  final user = ref.watch(currentUserProvider);
+  return user != null;
+});

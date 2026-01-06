@@ -1,64 +1,41 @@
 import 'package:flutter/material.dart';
-import '../../data/vehicle_brand_service.dart';
+import 'package:dropdown_search/dropdown_search.dart';
+import '../../data/car_brands.dart';
 
-class BrandDropdown extends StatefulWidget {
+
+class BrandDropdown extends StatelessWidget {
   final TextEditingController controller;
 
   const BrandDropdown({super.key, required this.controller});
 
   @override
-  State<BrandDropdown> createState() => _BrandDropdownState();
-}
-
-class _BrandDropdownState extends State<BrandDropdown> {
-  late Future<List<String>> _brandsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _brandsFuture = VehicleBrandService().fetchBrands();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<String>>(
-      future: _brandsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LinearProgressIndicator();
+    return DropdownSearch<String>(
+      items: getCarBrands(),
+      selectedItem:
+      controller.text.isEmpty ? null : controller.text,
+      popupProps: PopupProps.menu(
+        showSearchBox: true,
+        searchFieldProps: const TextFieldProps(
+          decoration: InputDecoration(
+            hintText: 'Rechercher une marque...',
+          ),
+        ),
+      ),
+      dropdownDecoratorProps: const DropDownDecoratorProps(
+        dropdownSearchDecoration: InputDecoration(
+          labelText: 'Marque *',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      onChanged: (value) {
+        controller.text = value ?? '';
+      },
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Champ obligatoire';
         }
-        if (snapshot.hasError) {
-          return TextFormField(
-            controller: widget.controller,
-            decoration: const InputDecoration(
-              labelText: 'Marque *',
-              helperText: 'Saisie manuelle (API indisponible)',
-            ),
-            validator: (v) =>
-            v == null || v.isEmpty ? 'Champ obligatoire' : null,
-          );
-        }
-
-        final brands = snapshot.data!;
-        return DropdownButtonFormField<String>(
-          value: widget.controller.text.isEmpty
-              ? null
-              : widget.controller.text,
-          decoration: const InputDecoration(labelText: 'Marque *'),
-          items: brands
-              .map(
-                (b) => DropdownMenuItem(
-              value: b,
-              child: Text(b),
-            ),
-          )
-              .toList(),
-          onChanged: (value) {
-            widget.controller.text = value ?? '';
-          },
-          validator: (v) =>
-          v == null || v.isEmpty ? 'Champ obligatoire' : null,
-        );
+        return null;
       },
     );
   }

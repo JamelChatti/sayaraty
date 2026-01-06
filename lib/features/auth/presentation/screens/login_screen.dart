@@ -2,47 +2,99 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../application/auth_service.dart';
+import '../../application/auth_state_notifier.dart';
+// Import du nouveau notifier
 
-
-class LoginScreen extends ConsumerWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+}
 
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    setState(() => _isLoading = true);
+
+    // Utiliser le notifier pour la connexion
+    final error = await ref.read(authStateNotifierProvider.notifier).signIn(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
+
+    setState(() => _isLoading = false);
+
+    if (error != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error)),
+        );
+      }
+    } else {
+      // Attendre un court instant pour que l'authentification se stabilise
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (mounted) {
+        // Utiliser pushReplacement pour éviter de revenir à l'écran de connexion
+        context.pushReplacement('/home');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Connexion')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Email')),
+            // Email
             TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Mot de passe'),
+              controller: _emailController,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+              ),
             ),
-            ElevatedButton(
-              onPressed: () async {
-                final error = await ref.read(authServiceProvider).signIn(
-                  emailController.text.trim(),
-                  passwordController.text.trim(),
-                );
-                if (error != null) {
+            const SizedBox(height: 16),
 
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-                  print(error);
-                }else{
-                  // ✅ S'assurer que l'utilisateur existe dans Firestore
-                  await ref.read(authServiceProvider).ensureUserExists();
-                  context.push('/home');
-                }
-              },
-              child: const Text('Se connecter'),
+            // Mot de passe
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Mot de passe',
+                border: OutlineInputBorder(),
+              ),
             ),
+            const SizedBox(height: 24),
+
+            // Bouton de connexion
+            SizedBox(
+              width: double.infinity,
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton(
+                onPressed: _signIn,
+                child: const Text('Se connecter'),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Lien vers inscription
             TextButton(
               onPressed: () => context.push('/signup'),
               child: const Text('Pas de compte ? Créer un compte'),

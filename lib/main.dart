@@ -6,6 +6,7 @@ import 'app/router.dart';
 import 'app/theme_provider.dart';
 import 'features/settings/application/settings_service.dart';
 import 'features/settings/domain/app_settings.dart';
+import 'l10n/app_localizations.dart';
 
 
 void main() async {
@@ -23,7 +24,7 @@ void main() async {
         // 👇 Force l'état initial du provider
         themeModeProvider.overrideWith((ref) => initialThemeMode),
       ],
-      child: MyApp(),
+      child: MyApp(settings: settings),
     ),
   );
 }
@@ -38,7 +39,8 @@ ThemeMode _mapToThemeMode(ThemeModeEnum e) {
 
 
 class MyApp extends ConsumerWidget {
-  const MyApp({super.key});
+  final AppSettings settings;
+  const MyApp({super.key, required this.settings});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,9 +49,24 @@ class MyApp extends ConsumerWidget {
     return MaterialApp.router(
       routerConfig: router,
       title: 'Gestion Entretien',
+      locale: settings.language.toLocale(), // 👈 Utilise votre LanguageEnum
+      supportedLocales: const [
+        Locale('fr'),
+        Locale('ar'),
+        Locale('en'),
+      ],
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       themeMode: themeMode, // 👈 Appliquez le mode
       theme: ThemeData.light(useMaterial3: true),
       darkTheme: ThemeData.dark(useMaterial3: true),
+      builder: (context, child) {
+        return Directionality(
+          textDirection: settings.language == LanguageEnum.ar
+              ? TextDirection.rtl
+              : TextDirection.ltr,
+          child: child!,
+        );
+      },
       debugShowCheckedModeBanner: false,
     );
   }

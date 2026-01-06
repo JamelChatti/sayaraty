@@ -1,23 +1,22 @@
+// lib/features/vehicles/presentation/widgets/vehicle_form.dart
 import 'package:flutter/material.dart';
 
-import 'brand_dropdown.dart';
+import '../../data/car_brands.dart';
 
 class VehicleForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
-
   final TextEditingController brandController;
   final TextEditingController modelController;
   final TextEditingController plateController;
   final TextEditingController yearController;
   final TextEditingController mileageController;
-
+  final TextEditingController vinController; // Ajouté
   final DateTime? insuranceExpiry;
   final DateTime? inspectionExpiry;
   final DateTime? taxExpiry;
-
-  final ValueChanged<DateTime?> onInsuranceExpiryChanged;
-  final ValueChanged<DateTime?> onInspectionExpiryChanged;
-  final ValueChanged<DateTime?> onTaxExpiryChanged;
+  final Function(DateTime?) onInsuranceExpiryChanged;
+  final Function(DateTime?) onInspectionExpiryChanged;
+  final Function(DateTime?) onTaxExpiryChanged;
 
   const VehicleForm({
     super.key,
@@ -27,33 +26,33 @@ class VehicleForm extends StatelessWidget {
     required this.plateController,
     required this.yearController,
     required this.mileageController,
-    required this.insuranceExpiry,
-    required this.inspectionExpiry,
-    required this.taxExpiry,
+    required this.vinController, // Ajouté
+    this.insuranceExpiry,
+    this.inspectionExpiry,
+    this.taxExpiry,
     required this.onInsuranceExpiryChanged,
     required this.onInspectionExpiryChanged,
     required this.onTaxExpiryChanged,
   });
 
-  Future<void> _pickDate(
+  Future<void> _selectDate(
       BuildContext context,
-      DateTime? current,
-      ValueChanged<DateTime?> onChanged,
+      Function(DateTime?) onChanged,
       ) async {
-    final picked = await showDatePicker(
+    final selected = await showDatePicker(
       context: context,
-      initialDate: current ?? DateTime.now(),
+      initialDate: DateTime.now(),
       firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      lastDate: DateTime(2030),
     );
-    if (picked != null) onChanged(picked);
+    if (selected != null) {
+      onChanged(selected);
+    }
   }
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Non défini';
-    return '${date.day.toString().padLeft(2, '0')}/'
-        '${date.month.toString().padLeft(2, '0')}/'
-        '${date.year}';
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   @override
@@ -63,104 +62,172 @@ class VehicleForm extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // --------------------
           // Marque
-          // --------------------
-          BrandDropdown(
-            controller: brandController,
-          ),
-
-          // --------------------
-          // Modèle
-          // --------------------
-          TextFormField(
-            controller: modelController,
-            decoration: const InputDecoration(labelText: 'Modèle *'),
-            validator: (v) =>
-            v == null || v.trim().isEmpty ? 'Champ obligatoire' : null,
-          ),
-
-          // --------------------
-          // Immatriculation
-          // --------------------
-          TextFormField(
-            controller: plateController,
-            decoration:
-            const InputDecoration(labelText: 'Immatriculation'),
-          ),
-
-          // --------------------
-          // Année
-          // --------------------
-          TextFormField(
-            controller: yearController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Année *'),
-            validator: (v) {
-              final year = int.tryParse(v ?? '');
-              if (year == null) return 'Année invalide';
-              if (year < 1900 || year > DateTime.now().year + 1) {
-                return 'Année incorrecte';
+          DropdownButtonFormField<String>(
+            initialValue: brandController.text.isEmpty ? null : brandController.text,
+            onChanged: (value) {
+              if (value != null) {
+                brandController.text = value;
+              }
+            },
+            decoration: const InputDecoration(labelText: 'Marque'),
+            items: getCarBrands().map<DropdownMenuItem<String>>((String brand) {
+              return DropdownMenuItem<String>(
+                value: brand,
+                child: Text(brand),
+              );
+            }).toList(),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Veuillez sélectionner une marque';
               }
               return null;
             },
           ),
+          const SizedBox(height: 16),
 
-          // --------------------
+          // Modèle
+          TextFormField(
+            controller: modelController,
+            decoration: const InputDecoration(
+              labelText: 'Modèle *',
+              hintText: 'ex: Clio',
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Le modèle est obligatoire';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Année
+          TextFormField(
+            controller: yearController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Année *',
+              hintText: 'ex: 2020',
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'L\'année est obligatoire';
+              }
+              final year = int.tryParse(value);
+              if (year == null || year < 1900 || year > DateTime.now().year + 1) {
+                return 'Année invalide';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Numéro d'immatriculation
+          TextFormField(
+            controller: plateController,
+            decoration: const InputDecoration(
+              labelText: 'Plaque d\'immatriculation',
+              hintText: 'ex: AB-123-CD',
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // VIN (Numéro de série)
+          TextFormField(
+            controller: vinController,
+            decoration: const InputDecoration(
+              labelText: 'VIN (Numéro de série)',
+              hintText: 'ex: VF1BZ060123456789',
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // Kilométrage
-          // --------------------
           TextFormField(
             controller: mileageController,
             keyboardType: TextInputType.number,
-            decoration:
-            const InputDecoration(labelText: 'Kilométrage (km)'),
+            decoration: const InputDecoration(
+              labelText: 'Kilométrage actuel (km)',
+              hintText: 'ex: 15000',
+            ),
           ),
-
           const SizedBox(height: 16),
 
-          // --------------------
-          // Assurance
-          // --------------------
-          ListTile(
-            title: const Text('Expiration assurance'),
-            subtitle: Text(_formatDate(insuranceExpiry)),
-            trailing: const Icon(Icons.calendar_today),
-            onTap: () => _pickDate(
-              context,
-              insuranceExpiry,
-              onInsuranceExpiryChanged,
-            ),
+          // Dates d'expiration
+          _buildDateSection(
+            context,
+            title: 'Assurance',
+            date: insuranceExpiry,
+            onTap: () => _selectDate(context, onInsuranceExpiryChanged),
           ),
-
-          // --------------------
-          // Contrôle technique
-          // --------------------
-          ListTile(
-            title: const Text('Contrôle technique'),
-            subtitle: Text(_formatDate(inspectionExpiry)),
-            trailing: const Icon(Icons.calendar_today),
-            onTap: () => _pickDate(
-              context,
-              inspectionExpiry,
-              onInspectionExpiryChanged,
-            ),
+          _buildDateSection(
+            context,
+            title: 'Contrôle technique',
+            date: inspectionExpiry,
+            onTap: () => _selectDate(context, onInspectionExpiryChanged),
           ),
-
-          // --------------------
-          // Taxe
-          // --------------------
-          ListTile(
-            title: const Text('Expiration taxe'),
-            subtitle: Text(_formatDate(taxExpiry)),
-            trailing: const Icon(Icons.calendar_today),
-            onTap: () => _pickDate(
-              context,
-              taxExpiry,
-              onTaxExpiryChanged,
-            ),
+          _buildDateSection(
+            context,
+            title: 'Taxe',
+            date: taxExpiry,
+            onTap: () => _selectDate(context, onTaxExpiryChanged),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDateSection(
+      BuildContext context, {
+        required String title,
+        required DateTime? date,
+        required VoidCallback onTap,
+      }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today, color: Colors.blue),
+                const SizedBox(width: 12),
+                Text(_formatDate(date)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.clear, size: 20),
+                  onPressed: () {
+                    if (title == 'Assurance') {
+                      onInsuranceExpiryChanged(null);
+                    } else if (title == 'Contrôle technique') {
+                      onInspectionExpiryChanged(null);
+                    } else if (title == 'Taxe') {
+                      onTaxExpiryChanged(null);
+                    }
+                  },
+                  tooltip: 'Effacer',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

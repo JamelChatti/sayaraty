@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
 import '../../application/auth_service.dart';
 import '../widgets/role_selector.dart';
-
 import '../../../../core/constants/app_roles.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
@@ -33,13 +31,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     super.dispose();
   }
 
-  void _signUp() async {
+  Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_passwordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Les mots de passe ne correspondent pas')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Les mots de passe ne correspondent pas')),
+        );
+      }
       return;
     }
 
@@ -56,10 +56,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     setState(() => _isLoading = false);
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error)),
+        );
+      }
     } else {
-      if (context.mounted) {
-        context.push('/home');
+      // Attendre un court instant pour que l'authentification se stabilise
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (mounted) {
+        // Utiliser pushReplacement pour éviter de revenir à l'écran de connexion
+        context.pushReplacement('/home');
       }
     }
   }

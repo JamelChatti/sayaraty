@@ -155,6 +155,47 @@ class _AttachmentContentState
     return u.contains('.pdf');
   }
 
+  // CONFIRM DELETE
+  // ----------------------------
+  Future<void> _confirmDeleteAttachment(String url) async {
+    final isImage = _isImage(url);
+    final isPdf = _isPdf(url);
+    String fileType = 'fichier';
+
+    if (isImage) {
+      fileType = 'image';
+    } else if (isPdf) {
+      fileType = 'PDF';
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmer la suppression'),
+        content: Text(
+          'Êtes-vous sûr de vouloir supprimer ce $fileType ? Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Supprimer',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _removeAttachment(url);
+    }
+  }
+
 
 
   // ----------------------------
@@ -207,7 +248,7 @@ class _AttachmentContentState
                     top: 2,
                     right: 2,
                     child: GestureDetector(
-                      onTap: () => _removeAttachment(url),
+                      onTap: () => _confirmDeleteAttachment(url),
                       child: const CircleAvatar(
                         radius: 12,
                         backgroundColor: Colors.red,

@@ -117,6 +117,7 @@ class Maintenance extends Equatable {
   final MaintenanceStatus status;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final String? ownerId;
   final List<MaintenanceItem> items;
 
   const Maintenance({
@@ -137,7 +138,8 @@ class Maintenance extends Equatable {
     this.status = MaintenanceStatus.completed,
     required this.createdAt,
     this.updatedAt,
-    required this.items
+    this.ownerId,
+    required this.items,
   });
 
   // Conversion vers Map (pour Firestore)
@@ -160,9 +162,55 @@ class Maintenance extends Equatable {
       'status': status.name,
       'createdAt': createdAt.millisecondsSinceEpoch,
       'updatedAt': updatedAt?.millisecondsSinceEpoch,
+      'ownerId': ownerId,
       'parts': <Map<String, dynamic>>[],
       'consumables': <Map<String, dynamic>>[],
     };
+  }
+
+  // Dans la classe Maintenance, ajoutez cette méthode :
+  Maintenance copyWith({
+    String? id,
+    String? userId,
+    String? vehicleId,
+    MaintenanceType? type,
+    String? title,
+    String? description,
+    DateTime? date,
+    double? mileage,
+    String? garageName,
+    String? garageContact,
+    double? cost,
+    String? receiptImageUrl,
+    double? nextDueMileage,
+    DateTime? nextDueDate,
+    MaintenanceStatus? status,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? ownerId,
+    List<MaintenanceItem>? items,
+  }) {
+    return Maintenance(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      vehicleId: vehicleId ?? this.vehicleId,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      date: date ?? this.date,
+      mileage: mileage ?? this.mileage,
+      garageName: garageName ?? this.garageName,
+      garageContact: garageContact ?? this.garageContact,
+      cost: cost ?? this.cost,
+      receiptImageUrl: receiptImageUrl ?? this.receiptImageUrl,
+      nextDueMileage: nextDueMileage ?? this.nextDueMileage,
+      nextDueDate: nextDueDate ?? this.nextDueDate,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      ownerId: ownerId ?? this.ownerId,
+      items: items ?? this.items,
+    );
   }
 
   // Création depuis Map (Firestore)
@@ -193,6 +241,7 @@ class Maintenance extends Equatable {
           ? MaintenanceStatus.values.firstWhere((e) => e.name == statusStr, orElse: () => MaintenanceStatus.completed)
           : MaintenanceStatus.completed,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int),
+      ownerId: map['ownerId'] as String?,
       updatedAt:
       map['updatedAt'] != null ? DateTime.fromMillisecondsSinceEpoch(map['updatedAt'] as int) : null,
       items: (map['maintenanceItems'] as List?)
@@ -220,6 +269,8 @@ class Maintenance extends Equatable {
     nextDueDate,
     status,
     createdAt,
+    ownerId,
     updatedAt,
   ];
+
 }

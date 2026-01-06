@@ -67,18 +67,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final extra = state.extra;
           if (extra == null || extra is! Map) {
-            // Gestion d'erreur : rediriger ou afficher un message
             return const Scaffold(body: Center(child: Text('Données manquantes')));
           }
           final args = extra as Map<String, dynamic>;
+          final ownerId = args['ownerId'] as String?;  // ← Ajout de ownerId
           final vehicleId = args['vehicleId'] as String?;
           final vehicleName = args['vehicleName'] as String?;
 
-          if (vehicleId == null || vehicleName == null) {
+          // Vérifier que tous les paramètres sont présents
+          if (ownerId == null || vehicleId == null || vehicleName == null) {
             return const Scaffold(body: Center(child: Text('Données invalides')));
           }
 
           return MaintenanceListScreen(
+            ownerId: ownerId,  // ← Passe l'ownerId au constructeur
             vehicleId: vehicleId,
             vehicleName: vehicleName,
           );
@@ -88,9 +90,42 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/maintenance/add',
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>?;
+
+          if (args == null) {
+            return const Scaffold(
+              body: Center(
+                child: Text('Données manquantes pour créer une maintenance'),
+              ),
+            );
+          }
+
+          final ownerId = args['ownerId'] as String?;
+          final vehicleId = args['vehicleId'] as String?;
+          final vehicleName = args['vehicleName'] as String?;
+
+          // Validation des données requises
+          if (ownerId == null || vehicleId == null || vehicleName == null) {
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Données incomplètes pour créer une maintenance'),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => context.go('/'),
+                      child: const Text('Retour à l\'accueil'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
           return AddMaintenanceScreen(
-            vehicleId: args!['vehicleId'] as String,
-            vehicleName: args['vehicleName'] as String,
+            ownerId: ownerId,
+            vehicleId: vehicleId,
+            vehicleName: vehicleName,
           );
         },
       ),
@@ -139,11 +174,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/vehicles/share',
         builder: (context, state) {
-          final vehicle = state.extra as Vehicle?;
-          if (vehicle == null) return const Scaffold(body: Center(child: Text('Erreur')));
-          return ShareVehicleScreen(vehicle: vehicle);
+
+          return SharedVehiclesListScreen();
         },
       ),
+
     ],
   );
 });

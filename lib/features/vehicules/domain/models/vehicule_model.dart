@@ -1,8 +1,11 @@
+// lib/features/vehicles/domain/models/vehicle_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'shared_access_model.dart';
 
 class Vehicle {
   final String id;
   final String userId;
+  final String ownerId;
 
   // Infos principales
   final String brand;
@@ -23,12 +26,15 @@ class Vehicle {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final List<String> attachments;
-  final List<String> sharedWith;
+  final List<SharedAccess> sharedWith;
+  final List<String> sharedWithUserIds;
   final String? mainPhotoUrl;
+  final String? ownerName;
 
   Vehicle({
     required this.id,
     required this.userId,
+    required this.ownerId,
     required this.brand,
     required this.model,
     this.plateNumber,
@@ -40,61 +46,92 @@ class Vehicle {
     this.taxExpiry,
     required this.createdAt,
     this.updatedAt,
-  this.attachments = const [],
+    this.attachments = const [],
     required this.sharedWith,
+    this.sharedWithUserIds = const [],
     this.mainPhotoUrl,
+    this.ownerName,
   });
 
-  // ----------------------------
-  // Firestore mapping
-  // ----------------------------
+  // Helper method to parse sharedWith
+  static List<SharedAccess> parseSharedWith(dynamic value) {
+    if (value == null) return [];
+    if (value is! List) return [];
+
+    return value.map((item) {
+      if (item is Map<String, dynamic>) {
+        return SharedAccess.fromMap(item);
+      } else if (item is String) {
+        // Legacy format: convert String to SharedAccess
+        return SharedAccess(
+          userId: item,
+          email: '',
+          displayName: null,
+          permissions: ['view'],
+          sharedAt: DateTime.now(),
+        );
+      }
+      return SharedAccess(
+        userId: '',
+        email: '',
+        displayName: null,
+        permissions: [],
+        sharedAt: DateTime.now(),
+      );
+    }).toList();
+  }
+
+  // Helper method to convert dates
+  static DateTime? toDate(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    return null;
+  }
 
   factory Vehicle.fromMap(Map<String, dynamic> map, String documentId) {
-    // Vérifiez les champs obligatoires
-
     final userId = map['userId'];
     final brand = map['brand'];
     final model = map['model'];
     final year = map['year'];
     final createdAt = map['createdAt'];
-
+    final ownerId = map['ownerId'];
 
     if (userId == null) throw Exception('Champ "userId" manquant');
     if (brand == null) throw Exception('Champ "brand" manquant');
     if (model == null) throw Exception('Champ "model" manquant');
     if (year == null) throw Exception('Champ "year" manquant');
     if (createdAt == null) throw Exception('Champ "createdAt" manquant');
-
-    DateTime? _toDate(dynamic value) {
-      if (value == null) return null;
-      if (value is Timestamp) return value.toDate();
-      if (value is String) return DateTime.parse(value); // ISO 8601
-      throw Exception('Format de date non supporté: ${value.runtimeType}');
-    }
+    if (ownerId == null) throw Exception('Champ "ownerId" manquant');
 
     return Vehicle(
       id: documentId,
-      userId: map['userId'] as String,
-      brand: map['brand'] as String,
-      model: map['model'] as String,
+      userId: userId as String,
+      ownerId: ownerId as String,
+      brand: brand as String,
+      model: model as String,
       plateNumber: map['plateNumber'] as String?,
       vin: map['vin'] as String?,
-      year: map['year'] as int,
+      year: (year as num).toInt(),
       mileage: (map['mileage'] as num?)?.toDouble(),
-      insuranceExpiry: _toDate(map['insuranceExpiry']),
-      technicalInspectionExpiry: _toDate(map['technicalInspectionExpiry']),
-      taxExpiry: _toDate(map['taxExpiry']),
-      createdAt: _toDate(map['createdAt'])!,
-      updatedAt: _toDate(map['updatedAt']),
+      insuranceExpiry: toDate(map['insuranceExpiry']),
+      technicalInspectionExpiry: toDate(map['technicalInspectionExpiry']),
+      taxExpiry: toDate(map['taxExpiry']),
+      createdAt: toDate(createdAt)!,
+      updatedAt: toDate(map['updatedAt']),
       attachments: List<String>.from(map['attachments'] ?? []),
-      sharedWith: List<String>.from(map['sharedWith'] ?? []),
+      sharedWith: parseSharedWith(map['sharedWith']),
+      sharedWithUserIds: List<String>.from(map['sharedWithUserIds'] ?? []),
       mainPhotoUrl: map['mainPhotoUrl'] as String?,
+      ownerName: map['ownerName'] as String?,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
+      'ownerId': ownerId,
       'brand': brand,
       'model': model,
       'plateNumber': plateNumber,
@@ -107,20 +144,42 @@ class Vehicle {
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'attachments': attachments,
-      'sharedWith': sharedWith,
+      'sharedWith': sharedWith.map((access) => access.toMap()).toList(),
+      'sharedWithUserIds': sharedWithUserIds,
       'mainPhotoUrl': mainPhotoUrl,
+      'ownerName':ownerName,
     };
   }
-}
 
-// ----------------------------
-// copyWith extension
-// ----------------------------
+  // Helper methods
+  bool hasAccess(String userId) {
+    return this.userId == userId ||
+        this.ownerId == userId ||
+        sharedWith.any((access) => access.userId == userId);
+  }
 
-extension VehicleCopyWith on Vehicle {
+  List<String> getUserPermissions(String userId) {
+    if (this.userId == userId || this.ownerId == userId) {
+      return ['view', 'edit', 'delete', 'share'];
+    }
+
+    final access = sharedWith.firstWhere(
+          (access) => access.userId == userId,
+      orElse: () => SharedAccess(
+        userId: '',
+        email: '',
+        permissions: [],
+        sharedAt: DateTime.now(),
+      ),
+    );
+
+    return access.permissions;
+  }
+
   Vehicle copyWith({
     String? id,
     String? userId,
+    String? ownerId,
     String? brand,
     String? model,
     String? plateNumber,
@@ -133,12 +192,14 @@ extension VehicleCopyWith on Vehicle {
     DateTime? createdAt,
     DateTime? updatedAt,
     List<String>? attachments,
-    List<String>? sharedWith,
+    List<SharedAccess>? sharedWith,
     String? mainPhotoUrl,
+    String? ownerName,
   }) {
     return Vehicle(
       id: id ?? this.id,
       userId: userId ?? this.userId,
+      ownerId: ownerId ?? this.ownerId,
       brand: brand ?? this.brand,
       model: model ?? this.model,
       plateNumber: plateNumber ?? this.plateNumber,
@@ -152,9 +213,9 @@ extension VehicleCopyWith on Vehicle {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       attachments: attachments ?? this.attachments,
-        sharedWith: sharedWith ?? this.sharedWith,
+      sharedWith: sharedWith ?? this.sharedWith,
       mainPhotoUrl: mainPhotoUrl ?? this.mainPhotoUrl,
-
+      ownerName: ownerName ?? this.ownerName,
     );
   }
 }

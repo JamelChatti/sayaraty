@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart'; // 🔑 Importe GoRouter
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../vehicules/presentation/screens/pro_vehicle_list_screen.dart';
 import '../../../vehicules/presentation/screens/vehicle_list_screen.dart';
+import '../../domain/models/user_model.dart';
 import '../screens/company_admin_home_screen.dart';
 
 class HomeRedirector extends ConsumerWidget {
@@ -13,7 +14,7 @@ class HomeRedirector extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userAsync = ref.watch(authStateProvider);
+    final userAsync = ref.watch<AsyncValue<AppUser?>>(authStateNotifierProvider);
 
     return userAsync.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),

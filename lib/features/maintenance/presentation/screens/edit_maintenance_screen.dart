@@ -4,25 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../auth/application/auth_state_notifier.dart';
-import '../../../vehicules/domain/models/vehicule_model.dart';
+import '../../../auth/domain/models/user_model.dart';
 import '../../application/maintenance_service.dart';
 import '../../domain/models/maintenance_model.dart';
-
 
 class EditMaintenanceScreen extends ConsumerStatefulWidget {
   final String maintenanceId;
 
-  const EditMaintenanceScreen({
-    super.key,
-    required this.maintenanceId,
-  });
+  const EditMaintenanceScreen({super.key, required this.maintenanceId});
 
   @override
-  ConsumerState<EditMaintenanceScreen> createState() => _EditMaintenanceScreenState();
+  ConsumerState<EditMaintenanceScreen> createState() =>
+      _EditMaintenanceScreenState();
 }
 
 class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
-  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _garageNameController;
@@ -31,30 +27,44 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
   late final TextEditingController _mileageController;
 
   Maintenance? _maintenance;
-  Vehicle? _vehicle;
 
   @override
   Widget build(BuildContext context) {
     // Charger la maintenance à modifier
-    final maintenanceAsync = ref.watch(maintenanceByIdStreamProvider(widget.maintenanceId));
+    final maintenanceAsync = ref.watch(
+      maintenanceByIdStreamProvider(widget.maintenanceId),
+    );
 
     return maintenanceAsync.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, _) => Scaffold(body: Center(child: Text('Erreur: $err'))),
       data: (maintenance) {
         if (maintenance == null) {
-          return Scaffold(body: Center(child: Text('Intervention non trouvée')));
+          return Scaffold(
+            body: Center(child: Text('Intervention non trouvée')),
+          );
         }
 
         // Charger le véhicule associé (optionnel, pour afficher le nom)
         if (_maintenance == null) {
           _maintenance = maintenance;
           _titleController = TextEditingController(text: maintenance.title);
-          _descriptionController = TextEditingController(text: maintenance.description);
-          _garageNameController = TextEditingController(text: maintenance.garageName);
-          _garageContactController = TextEditingController(text: maintenance.garageContact);
-          _costController = TextEditingController(text: maintenance.cost.toString());
-          _mileageController = TextEditingController(text: maintenance.mileage.toString());
+          _descriptionController = TextEditingController(
+            text: maintenance.description,
+          );
+          _garageNameController = TextEditingController(
+            text: maintenance.garageName,
+          );
+          _garageContactController = TextEditingController(
+            text: maintenance.garageContact,
+          );
+          _costController = TextEditingController(
+            text: maintenance.cost.toString(),
+          );
+          _mileageController = TextEditingController(
+            text: maintenance.mileage.toString(),
+          );
         }
 
         return _MaintenanceEditForm(
@@ -66,9 +76,13 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
           costController: _costController,
           mileageController: _mileageController,
           onSaved: (updatedMaintenance) async {
-            await ref.read(maintenanceServiceProvider).updateMaintenance(updatedMaintenance);
+            await ref
+                .read(maintenanceServiceProvider)
+                .updateMaintenance(updatedMaintenance);
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Modifié avec succès !')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Modifié avec succès !')),
+              );
               context.push('/vehicles'); // ou retour à la fiche véhicule
             }
           },
@@ -102,10 +116,12 @@ class _MaintenanceEditForm extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authStateProvider).asData?.value;
+    final user = ref
+        .watch<AsyncValue<AppUser?>>(authStateNotifierProvider)
+        .asData
+        ?.value;
     if (user == null) return const SizedBox();
 
-    double currentMileage = maintenance.mileage;
     DateTime currentDate = maintenance.date;
     MaintenanceType currentType = maintenance.type;
     MaintenanceStatus currentStatus = maintenance.status;
@@ -118,7 +134,7 @@ class _MaintenanceEditForm extends ConsumerWidget {
           children: [
             // Type (non modifiable si déjà terminée ? optionnel)
             DropdownButtonFormField<MaintenanceType>(
-              value: currentType,
+              initialValue: currentType,
               decoration: const InputDecoration(labelText: 'Type *'),
               items: MaintenanceType.values.map((type) {
                 return DropdownMenuItem(
@@ -193,7 +209,7 @@ class _MaintenanceEditForm extends ConsumerWidget {
 
             // Statut (optionnel)
             DropdownButtonFormField<MaintenanceStatus>(
-              value: currentStatus,
+              initialValue: currentStatus,
               decoration: const InputDecoration(labelText: 'Statut *'),
               items: MaintenanceStatus.values.map((status) {
                 return DropdownMenuItem(
@@ -201,7 +217,8 @@ class _MaintenanceEditForm extends ConsumerWidget {
                   child: Text(_getMaintenanceStatusLabel(status)),
                 );
               }).toList(),
-              onChanged: null, // Désactivé pour l'instant — vous pouvez l'activer si besoin
+              onChanged:
+                  null, // Désactivé pour l'instant — vous pouvez l'activer si besoin
             ),
           ],
         ),
@@ -211,15 +228,25 @@ class _MaintenanceEditForm extends ConsumerWidget {
           if (titleController.text.trim().isEmpty ||
               mileageController.text.trim().isEmpty ||
               costController.text.trim().isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez remplir tous les champs obligatoires.')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Veuillez remplir tous les champs obligatoires.'),
+              ),
+            );
             return;
           }
 
           final updatedMaintenance = maintenance.copyWith(
             title: titleController.text.trim(),
-            description: descriptionController.text.trim().isNotEmpty ? descriptionController.text.trim() : null,
-            garageName: garageNameController.text.trim().isNotEmpty ? garageNameController.text.trim() : null,
-            garageContact: garageContactController.text.trim().isNotEmpty ? garageContactController.text.trim() : null,
+            description: descriptionController.text.trim().isNotEmpty
+                ? descriptionController.text.trim()
+                : null,
+            garageName: garageNameController.text.trim().isNotEmpty
+                ? garageNameController.text.trim()
+                : null,
+            garageContact: garageContactController.text.trim().isNotEmpty
+                ? garageContactController.text.trim()
+                : null,
             mileage: double.parse(mileageController.text.trim()),
             cost: double.parse(costController.text.trim()),
             updatedAt: DateTime.now(),
@@ -234,22 +261,33 @@ class _MaintenanceEditForm extends ConsumerWidget {
 
   String _getMaintenanceTypeLabel(MaintenanceType type) {
     switch (type) {
-      case MaintenanceType.oilChange: return 'Vidange';
-      case MaintenanceType.brakes: return 'Freins';
-      case MaintenanceType.tires: return 'Pneus';
-      case MaintenanceType.battery: return 'Batterie';
-      case MaintenanceType.timingBelt: return 'Courroie';
-      case MaintenanceType.technicalInspection: return 'Contrôle technique';
-      case MaintenanceType.repair: return 'Réparation';
-      case MaintenanceType.other: return 'Autre';
+      case MaintenanceType.oilChange:
+        return 'Vidange';
+      case MaintenanceType.brakes:
+        return 'Freins';
+      case MaintenanceType.tires:
+        return 'Pneus';
+      case MaintenanceType.battery:
+        return 'Batterie';
+      case MaintenanceType.timingBelt:
+        return 'Courroie';
+      case MaintenanceType.technicalInspection:
+        return 'Contrôle technique';
+      case MaintenanceType.repair:
+        return 'Réparation';
+      case MaintenanceType.other:
+        return 'Autre';
     }
   }
 
   String _getMaintenanceStatusLabel(MaintenanceStatus status) {
     switch (status) {
-      case MaintenanceStatus.completed: return 'Terminée';
-      case MaintenanceStatus.planned: return 'Planifiée';
-      case MaintenanceStatus.canceled: return 'Annulée';
+      case MaintenanceStatus.completed:
+        return 'Terminée';
+      case MaintenanceStatus.planned:
+        return 'Planifiée';
+      case MaintenanceStatus.canceled:
+        return 'Annulée';
     }
   }
 }

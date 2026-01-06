@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/models/shared_access_model.dart';
 import '../domain/models/vehicule_model.dart';
 
 final vehicleServiceProvider = Provider<VehicleService>((ref) {
@@ -35,19 +36,58 @@ StreamProvider.autoDispose.family<List<Vehicle>, String>((ref, userId) {
   });
 });
 // Dans vehicle_service.dart (au niveau racine, avec les autres providers)
+// final sharedVehiclesStreamProvider = StreamProvider.autoDispose.family<List<Vehicle>, String>((ref, proId) {
+//   return FirebaseFirestore.instance
+//       .collection('vehicles')
+//       .where('sharedWith.userId', isEqualTo: proId)  // Recherche du userId dans le champ sharedWith
+//       .snapshots()
+//       .map((snapshot) {
+//     return snapshot.docs.map((doc) {
+//       final data = doc.data();
+//       data['id'] = doc.id;
+//       return Vehicle.fromMap(data, doc.id);
+//     }).toList();
+//   });
+// });
+
 final sharedVehiclesStreamProvider = StreamProvider.autoDispose.family<List<Vehicle>, String>((ref, proId) {
   return FirebaseFirestore.instance
       .collection('vehicles')
-      .where('sharedWith', arrayContains: proId)
       .snapshots()
       .map((snapshot) {
-    return snapshot.docs.map((doc) {
+    return snapshot.docs
+        .map((doc) {
       final data = doc.data();
-      data['id'] = doc.id;
-      return Vehicle.fromMap(data,doc.id);
-    }).toList();
+      final sharedWith = (data['sharedWith'] as List<dynamic>)
+          .map((access) => SharedAccess.fromMap(Map<String, dynamic>.from(access)))
+          .toList();
+
+      // Filtrer les véhicules partagés avec le proId
+      final sharedWithPro = sharedWith.firstWhere(
+            (access) => access.userId == proId,
+        orElse: () => SharedAccess( // Remplacer null par un objet par défaut
+          userId: '',
+          email: '',
+          displayName: '',
+          permissions: [],
+          sharedAt: DateTime.now(),
+        ),
+      );
+
+      // Si le véhicule est partagé avec le professionnel, le retourner
+      if (sharedWithPro.userId == proId) {
+        data['id'] = doc.id;
+        return Vehicle.fromMap(data, doc.id); // Retourner le véhicule si partagé
+      }
+      return null; // Ne pas retourner de véhicule s'il n'est pas partagé
+    })
+        .where((vehicle) => vehicle != null) // Filtrer les nulls
+        .toList()
+        .cast<Vehicle>(); // Cast à List<Vehicle> sans nulls
   });
 });
+
+
 class VehicleService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -93,4 +133,37 @@ class VehicleService {
           .toList(),
     );
   }
+
+  // Pour mettre à jour le partage
+  Future<void> updateVehicleSharedWith({
+    required String vehicleId,
+    required List<SharedAccess> sharedWith,
+  }) async {
+    await _firestore.collection('vehicles').doc(vehicleId).update({
+      'sharedWith': sharedWith.map((access) => access.toMap()).toList(),
+    });
+  }
+
+  // Obtenir les véhicules partagés avec un utilisateur
+
+
+  // ✅ Obtenir les véhicules partagés avec un utilisateur
+  Stream<List<Vehicle>> getSharedVehicles(String userId) {
+    try {
+      return _firestore
+          .collection('vehicles')
+          .where('sharedWithUserIds', arrayContains: userId)
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs.map((doc) {
+          return Vehicle.fromMap(doc.data(), doc.id);
+        }).toList();
+      });
+    } catch (e) {
+      print('❌ Erreur getSharedVehicles: $e');
+      return Stream.value([]);
+    }
+  }
+
+
 }

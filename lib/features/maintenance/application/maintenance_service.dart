@@ -9,24 +9,52 @@ final maintenanceServiceProvider = Provider<MaintenanceService>((ref) {
 });
 
 // 🔹 Provider Stream pour écouter les maintenances d'un véhicule
-// ✅ Changer le type de paramètre : utiliser une liste ou un objet personnalisé
-final maintenancesStreamProvider = StreamProvider.autoDispose.family<List<Maintenance>, ({String userId, String vehicleId})>((ref, args) {
-return ref.watch(maintenanceServiceProvider).watchMaintenances(args.vehicleId, args.userId);
-});
+final maintenancesStreamProvider = StreamProvider.autoDispose
+    .family<List<Maintenance>, ({String userId, String vehicleId})>((
+      ref,
+      args,
+    ) {
+      return ref
+          .watch(maintenanceServiceProvider)
+          .watchMaintenances(args.vehicleId, args.userId);
+    });
 
+// ✅ NOUVEAU: Provider pour les professionnels
 // Dans maintenance_service.dart
-final maintenanceByIdStreamProvider = StreamProvider.autoDispose.family<Maintenance?, String>((ref, maintenanceId) {
-  return FirebaseFirestore.instance
-      .collection('maintenances')
-      .doc(maintenanceId)
-      .snapshots()
-      .map((snapshot) {
-    if (!snapshot.exists) return null;
-    final data = snapshot.data()!;
-    data['id'] = snapshot.id;
-    return Maintenance.fromMap(data);
-  });
-});
+// ✅ CORRIGÉ : Utiliser un record nommé au lieu d'un Map
+final professionalMaintenancesStreamProvider =
+    StreamProvider.family<
+      List<Maintenance>,
+      ({String professionalId, String vehicleId, String clientId})
+    >((ref, args) {
+      final service = ref.watch(maintenanceServiceProvider);
+
+      // Logs pour vérifier les valeurs des arguments
+      print('Request parameters:');
+      print('Professional ID: ${args.professionalId}');
+      print('Vehicle ID: ${args.vehicleId}');
+      print('Client ID: ${args.clientId}');
+
+      return service.getProfessionalMaintenancesStream(
+        professionalId: args.professionalId,
+        vehicleId: args.vehicleId,
+        clientId: args.clientId,
+      );
+    });
+// Provider pour une maintenance spécifique
+final maintenanceByIdStreamProvider = StreamProvider.autoDispose
+    .family<Maintenance?, String>((ref, maintenanceId) {
+      return FirebaseFirestore.instance
+          .collection('maintenances')
+          .doc(maintenanceId)
+          .snapshots()
+          .map((snapshot) {
+            if (!snapshot.exists) return null;
+            final data = snapshot.data()!;
+            data['id'] = snapshot.id;
+            return Maintenance.fromMap(data);
+          });
+    });
 
 class MaintenanceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -39,8 +67,10 @@ class MaintenanceService {
 
   // ✅ Mettre à jour une maintenance existante
   Future<void> updateMaintenance(Maintenance maintenance) async {
-    final docRef = _firestore.collection('maintenances').doc(maintenance.id);
-    await docRef.update(maintenance.toMap());
+    await _firestore
+        .collection('maintenances')
+        .doc(maintenance.id)
+        .update(maintenance.toMap());
   }
 
   // ✅ Supprimer une maintenance
@@ -49,16 +79,23 @@ class MaintenanceService {
   }
 
   // ✅ Lire les maintenances d'un véhicule (triées par date DESC)
-  Stream<List<Maintenance>> watchMaintenances(String vehicleId, String userId) {
-    return _firestore
+  Stream<List<Maintenance>> watchMaintenances(
+    String vehicleId,
+    String userId, {
+    String? ownerId,
+  }) {
+    Query query = _firestore
         .collection('maintenances')
         .where('userId', isEqualTo: userId)
-        .where('vehicleId', isEqualTo: vehicleId)
-        .orderBy('date', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
+        .where('vehicleId', isEqualTo: vehicleId);
+
+    if (ownerId != null) {
+      query = query.where('ownerId', isEqualTo: ownerId);
+    }
+
+    return query.orderBy('date', descending: true).snapshots().map((snapshot) {
+      return snapshot.docs.where((doc) => doc.data() != null).map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id; // 🔑 Injection de l'ID du document
         return Maintenance.fromMap(data);
       }).toList();
@@ -74,13 +111,158 @@ class MaintenanceService {
         .orderBy('nextDueDate', descending: false)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return Maintenance.fromMap(data);
-      }).toList();
-    });
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return Maintenance.fromMap(data);
+          }).toList();
+        });
   }
 
+  // ✅ Méthode pour les professionnels pour accéder aux maintenances de leurs clients
+  Stream<List<Maintenance>> getProfessionalMaintenancesStream({
+    required String professionalId,
+    required String vehicleId,
+    required String clientId,
+  }) {
+    return _firestore
+        .collection('maintenances')
+        .where('vehicleId', isEqualTo: vehicleId)
+        .where('ownerId', isEqualTo: clientId)
+        .orderBy('date', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return Maintenance.fromMap(
+              data,
+            ); // Utilisation de fromMap au lieu de fromFirestore
+          }).toList(),
+        );
+  }
 
+  // ✅ CORRIGÉ: Méthode pour les pros
+  Stream<List<Maintenance>> getProfessionalMaintenances({
+    required String vehicleId,
+    required String clientId,
+  }) {
+    print('🔍 Recherche des maintenances pour:');
+    print('   - vehicleId: $vehicleId');
+    print('   - clientId: $clientId');
+
+    return _firestore
+        .collection('maintenances')
+        .where('vehicleId', isEqualTo: vehicleId)
+        .where(
+          'ownerId',
+          isEqualTo: clientId,
+        ) // ⚠️ CHANGÉ: 'userId' au lieu de 'ownerId'
+        .orderBy('date', descending: true)
+        .snapshots()
+        .handleError((error) {
+          print('❌ Erreur Firestore: $error');
+          throw error;
+        })
+        .map((snapshot) {
+          print('📊 Nombre de documents trouvés: ${snapshot.docs.length}');
+
+          final maintenances = snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+
+            // Debug: afficher chaque document
+            print('📄 Document ${doc.id}: ${data}');
+
+            return Maintenance.fromMap(data);
+          }).toList();
+
+          return maintenances;
+        });
+  }
+
+  // Dans MaintenanceService class
+  Future<void> addMaintenanceForSharedVehicle({
+    required Maintenance maintenance,
+    required String currentUserId,
+  }) async {
+    // Vérifier que l'utilisateur a la permission d'ajouter
+    final vehicleDoc = await _firestore
+        .collection('vehicles')
+        .doc(maintenance.vehicleId)
+        .get();
+
+    final vehicleData = vehicleDoc.data();
+    if (vehicleData == null) throw Exception('Véhicule non trouvé');
+
+    final vehicleOwnerId = vehicleData['ownerId'];
+
+    // Si c'est le propriétaire
+    if (vehicleOwnerId == currentUserId) {
+      await addMaintenance(maintenance);
+      return;
+    }
+
+    // Vérifier les permissions partagées
+    final sharedList = List<Map<String, dynamic>>.from(
+      vehicleData['sharedWith'] ?? [],
+    );
+
+    final userAccess = sharedList.firstWhere(
+      (access) => access['userId'] == currentUserId,
+      orElse: () => {},
+    );
+
+    final permissions = List<String>.from(userAccess['permissions'] ?? []);
+
+    if (!permissions.contains('maintenance_add')) {
+      throw Exception(
+        'Vous n\'avez pas la permission d\'ajouter des maintenances',
+      );
+    }
+
+    // ✅ CORRIGÉ : Créer une nouvelle maintenance avec copyWith
+    final maintenanceToAdd = maintenance.copyWith(
+      ownerId: vehicleOwnerId,
+      userId: currentUserId, // L'utilisateur qui crée réellement la maintenance
+    );
+
+    await addMaintenance(maintenanceToAdd);
+  }
+
+  // Dans MaintenanceService class
+  Future<void> addMaintenanceWithPermissionCheck({
+    required Maintenance maintenance,
+    required String currentUserId,
+  }) async {
+    // 1. Vérifier si l'utilisateur est propriétaire du véhicule
+    final vehicleDoc = await _firestore
+        .collection('vehicles')
+        .doc(maintenance.vehicleId)
+        .get();
+
+    final vehicleData = vehicleDoc.data();
+    if (vehicleData == null) {
+      throw Exception('Véhicule non trouvé');
+    }
+
+    final vehicleOwnerId = vehicleData['ownerId'];
+
+    // 2. Si c'est le propriétaire, ajouter directement
+    if (vehicleOwnerId == currentUserId) {
+      // S'assurer que ownerId et userId sont corrects
+      final maintenanceWithOwner = maintenance.copyWith(
+        ownerId: vehicleOwnerId,
+        userId: currentUserId,
+      );
+      await addMaintenance(maintenanceWithOwner);
+      return;
+    }
+
+    // 3. Sinon, vérifier les permissions partagées
+    await addMaintenanceForSharedVehicle(
+      maintenance: maintenance,
+      currentUserId: currentUserId,
+    );
+  }
 }

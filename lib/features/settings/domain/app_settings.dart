@@ -1,4 +1,6 @@
 // lib/features/settings/domain/models/app_settings.dart
+import 'dart:ui';
+
 enum ThemeModeEnum { system, light, dark }
 enum LanguageEnum { fr, ar, en }
 enum CurrencyEnum { dzd, eur, usd, tnd, gbp, mad, sar, qar }
@@ -33,3 +35,23 @@ class AppSettings {
     return values.firstWhere((v) => v.toString().split('.').last == name, orElse: () => values.first);
   }
 }
+
+// ✅ Extension déplacée HORS de la classe
+extension LanguageEnumExtension on LanguageEnum {
+  Locale toLocale() {
+    switch (this) {
+      case LanguageEnum.fr: return const Locale('fr');
+      case LanguageEnum.ar: return const Locale('ar');
+      case LanguageEnum.en: return const Locale('en');
+    }
+  }
+
+  static LanguageEnum fromLocale(Locale locale) {
+    switch (locale.languageCode) {
+      case 'ar': return LanguageEnum.ar;
+      case 'en': return LanguageEnum.en;
+      default: return LanguageEnum.fr;
+    }
+  }
+}
+

@@ -6,6 +6,7 @@ class AppUser extends Equatable {
   final String? name;
   final String? role; // ← rendu nullable
   final String? companyId;
+  final String? userType;
 
   const AppUser({
     required this.uid,
@@ -13,6 +14,7 @@ class AppUser extends Equatable {
     this.name,
     this.role, // ← pas "required"
     this.companyId,
+    this.userType,
   });
 
   factory AppUser.fromMap(Map<String, dynamic> map) {
@@ -32,6 +34,7 @@ class AppUser extends Equatable {
       name: map['name'] as String?,
       role: map['role'] as String?, // ✅ pas de ?? '' si vous gardez role nullable
       companyId: map['companyId'] as String?,
+      userType: map['userType']  as String?,
     );
   }
 
@@ -42,9 +45,10 @@ class AppUser extends Equatable {
       'name': name,
       'role': role, // peut être null
       'companyId': companyId,
+      'userType':userType
     };
   }
 
   @override
-  List<Object?> get props => [uid, email, name, role, companyId];
+  List<Object?> get props => [uid, email, name, role, companyId,userType];
 }

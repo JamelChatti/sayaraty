@@ -114,20 +114,14 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
           // 💰 Devise
           ListTile(
             title: const Text('Devise'),
-            subtitle: Text(_getCurrencyLabel(_settings.currency)),
+            subtitle: Text('Actuelle : ${_settings.currency.name.toUpperCase()}'),
             trailing: DropdownButton<CurrencyEnum>(
               value: _settings.currency,
-              items: CurrencyEnum.values.map((e) {
-                return DropdownMenuItem(
-                  value: e,
-                  child: Text(_getCurrencyLabel(e)),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _settings = _settings.copyWith(currency: value!);
-                });
-                _saveSettings();
+              items: CurrencyEnum.values.map((e) => DropdownMenuItem(value: e, child: Text(e.name.toUpperCase()))).toList(),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _settings = _settings.copyWith(currency: v));
+                ref.read(settingsServiceProvider).saveSettings(_settings);
               },
             ),
           ),

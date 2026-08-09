@@ -810,7 +810,7 @@ class _SharedVehiclesListScreenState extends ConsumerState<SharedVehiclesListScr
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Véhicules partagés avec moi'),
+            title: const Text('Véhicules clients'),
             actions: [
               IconButton(
                 icon: const Icon(Icons.refresh),

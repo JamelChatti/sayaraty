@@ -2,7 +2,7 @@ name: sayaraty
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.10.0
@@ -81,3 +81,8 @@ flutter_launcher_icons:
   #adaptive_icon_background: "#1E3A8A"
   adaptive_icon_foreground: "assets/images/logo_sayaraty.png"
   adaptive_icon_background: "#F5F7FB"
+  windows:
+    generate: true
+    image_path: "assets/images/logo_sayaraty.png" # Chemin vers ton logo
+    icon_size: 48 # Taille optionnelle
+

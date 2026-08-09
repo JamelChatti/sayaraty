@@ -1,0 +1,22 @@
+{
+  "appTitle": {
+    "fr": "Sayaraty",
+    "en": "Sayaraty",
+    "ar": "سيارتي"
+  },
+  "vehicles": {
+    "fr": "Véhicules",
+    "en": "Vehicles",
+    "ar": "المركبات"
+  },
+  "addVehicle": {
+    "fr": "Ajouter un véhicule",
+    "en": "Add vehicle",
+    "ar": "إضافة مركبة"
+  },
+  "settings": {
+    "fr": "Paramètres",
+    "en": "Settings",
+    "ar": "الإعدادات"
+  }
+}

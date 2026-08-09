@@ -81,7 +81,11 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
     switch (_selectedType) {
       case MaintenanceType.oilChange:
         _nextDueMileage = _selectedMileage + 15000;
-        _nextDueDate = DateTime(_selectedDate.year + 1, _selectedDate.month, _selectedDate.day);
+        _nextDueDate = DateTime(
+          _selectedDate.year + 1,
+          _selectedDate.month,
+          _selectedDate.day,
+        );
         break;
       case MaintenanceType.brakes:
         _nextDueMileage = _selectedMileage + 30000;
@@ -93,7 +97,11 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
         break;
       case MaintenanceType.technicalInspection:
         _nextDueMileage = null;
-        _nextDueDate = DateTime(_selectedDate.year + 2, _selectedDate.month, _selectedDate.day);
+        _nextDueDate = DateTime(
+          _selectedDate.year + 2,
+          _selectedDate.month,
+          _selectedDate.day,
+        );
         break;
       default:
         _nextDueMileage = null;
@@ -123,13 +131,18 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Véhicule : ${widget.vehicleName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(
+            'Véhicule : ${widget.vehicleName}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 16),
 
           // Type
           DropdownButtonFormField<MaintenanceType>(
-            value: _selectedType,
-            decoration: const InputDecoration(labelText: 'Type d\'intervention *'),
+            initialValue: _selectedType,
+            decoration: const InputDecoration(
+              labelText: 'Type d\'intervention *',
+            ),
             items: MaintenanceType.values.map((type) {
               return DropdownMenuItem(
                 value: type,
@@ -217,7 +230,9 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
           // Contact
           TextFormField(
             controller: _garageContactController,
-            decoration: const InputDecoration(labelText: 'Contact (téléphone/email)'),
+            decoration: const InputDecoration(
+              labelText: 'Contact (téléphone/email)',
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -238,9 +253,13 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
               if (!_formKey.currentState!.validate()) return;
 
               final maintenance = Maintenance(
-                id: widget.initialMaintenance?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                userId: 'PLACEHOLDER_USER_ID', // ⚠️ À remplacer par l'UID réel dans le parent
-                vehicleId: 'PLACEHOLDER_VEHICLE_ID', // ⚠️ À remplacer dans le parent
+                id:
+                    widget.initialMaintenance?.id ??
+                    DateTime.now().millisecondsSinceEpoch.toString(),
+                userId:
+                    'PLACEHOLDER_USER_ID', // ⚠️ À remplacer par l'UID réel dans le parent
+                vehicleId:
+                    'PLACEHOLDER_VEHICLE_ID', // ⚠️ À remplacer dans le parent
                 type: _selectedType,
                 title: _titleController.text.trim(),
                 description: _descriptionController.text.trim().isEmpty
@@ -259,14 +278,19 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
                 nextDueMileage: _nextDueMileage,
                 nextDueDate: _nextDueDate,
                 status: MaintenanceStatus.completed,
-                createdAt: widget.initialMaintenance?.createdAt ?? DateTime.now(),
-                updatedAt: widget.initialMaintenance != null ? DateTime.now() : null,
-                items:  [],
+                createdAt:
+                    widget.initialMaintenance?.createdAt ?? DateTime.now(),
+                updatedAt: widget.initialMaintenance != null
+                    ? DateTime.now()
+                    : null,
+                items: [],
               );
 
               widget.onSave(maintenance);
             },
-            child: Text(widget.initialMaintenance == null ? 'Ajouter' : 'Modifier'),
+            child: Text(
+              widget.initialMaintenance == null ? 'Ajouter' : 'Modifier',
+            ),
           ),
         ],
       ),
@@ -275,14 +299,24 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
 
   String _getMaintenanceTypeLabel(MaintenanceType type) {
     switch (type) {
-      case MaintenanceType.oilChange: return 'Vidange';
-      case MaintenanceType.brakes: return 'Freins';
-      case MaintenanceType.tires: return 'Pneus';
-      case MaintenanceType.battery: return 'Batterie';
-      case MaintenanceType.timingBelt: return 'Courroie';
-      case MaintenanceType.technicalInspection: return 'Contrôle technique';
-      case MaintenanceType.repair: return 'Réparation';
-      case MaintenanceType.other: return 'Autre';
+      case MaintenanceType.oilChange:
+        return 'Vidange';
+      case MaintenanceType.brakes:
+        return 'Freins';
+      case MaintenanceType.tires:
+        return 'Pneus';
+      case MaintenanceType.battery:
+        return 'Batterie';
+      case MaintenanceType.timingBelt:
+        return 'Courroie';
+      case MaintenanceType.technicalInspection:
+        return 'Contrôle technique';
+      case MaintenanceType.repair:
+        return 'Réparation';
+      case MaintenanceType.fuel:
+        return 'Carburant';
+      case MaintenanceType.other:
+        return 'Autre';
     }
   }
 }

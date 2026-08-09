@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/security/password_confirm_dialog.dart';
 import '../../application/vehicle_service.dart';
 
 import '../../domain/models/vehicule_model.dart';
@@ -97,28 +98,15 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
           IconButton(
             icon: const Icon(Icons.delete, color: Colors.red),
             onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Supprimer le véhicule ?'),
-                  content: const Text(
+              final confirm = await confirmWithPassword(
+                context,
+                title: 'Supprimer le véhicule ?',
+                message:
                     'Êtes-vous sûr de vouloir supprimer ce véhicule ? '
-                        'Toutes les interventions associées seront également supprimées.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Annuler'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text(
-                        'Supprimer',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
-                ),
+                    'Toutes les interventions associées seront également '
+                    'supprimées.\nEntrez votre mot de passe pour confirmer.',
+                confirmLabel: 'Supprimer',
+                isDestructive: true,
               );
               if (confirm == true) {
                 try {
@@ -166,6 +154,16 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
         child: const Icon(Icons.check),
         onPressed: () async {
           if (!_formKey.currentState!.validate()) return;
+
+          final confirmed = await confirmWithPassword(
+            context,
+            title: 'Enregistrer les modifications ?',
+            message:
+                'Confirmez la mise à jour de ce véhicule.\n'
+                'Entrez votre mot de passe pour continuer.',
+            confirmLabel: 'Enregistrer',
+          );
+          if (confirmed != true || !context.mounted) return;
 
           try {
             final year = int.tryParse(_yearController.text);

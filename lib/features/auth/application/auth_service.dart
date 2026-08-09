@@ -114,12 +114,36 @@ class AuthService {
     }
   }
 
+  /// Re-authentifie l'utilisateur avec son mot de passe (avant action sensible).
+  Future<String?> reauthenticate(String password) async {
+    final user = _auth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) {
+      return 'Session expirée. Reconnectez-vous';
+    }
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+      await user.reauthenticateWithCredential(credential);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return _getErrorMessage(e);
+    } catch (_) {
+      return 'Impossible de vérifier le mot de passe';
+    }
+  }
+
   // Méthode utilitaire pour les messages d'erreur
   String _getErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
         return 'Aucun utilisateur trouvé avec cet email';
       case 'wrong-password':
+        return 'Mot de passe incorrect';
+      case 'invalid-credential':
+      case 'invalid-login-credentials':
         return 'Mot de passe incorrect';
       case 'email-already-in-use':
         return 'Cet email est déjà utilisé';

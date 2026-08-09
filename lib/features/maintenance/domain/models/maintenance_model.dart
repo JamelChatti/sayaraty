@@ -1,25 +1,21 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
 import 'maintenance_item.dart';
 
-// 🔹 Types d'intervention
 enum MaintenanceType {
-  oilChange,              // Vidange
-  brakes,                 // Freins
-  tires,                  // Pneus
-  battery,                // Batterie
-  timingBelt,             // Courroie
-  technicalInspection,    // Contrôle technique
-  repair,                 // Réparation
-  other                   // Autre
+  oilChange,
+  brakes,
+  tires,
+  battery,
+  timingBelt,
+  technicalInspection,
+  repair,
+  fuel,
+  other,
 }
 
-// 🔹 Statut de l'intervention
-enum MaintenanceStatus {
-  completed,  // Terminée
-  planned,    // Planifiée
-  canceled,   // Annulée
-}
+enum MaintenanceStatus { completed, planned, canceled }
 
 // 🔹 Pièce détachée
 class Part {
@@ -27,11 +23,7 @@ class Part {
   final int quantity;
   final double unitPrice;
 
-  const Part({
-    required this.name,
-    this.quantity = 1,
-    this.unitPrice = 0.0,
-  });
+  const Part({required this.name, this.quantity = 1, this.unitPrice = 0.0});
 
   Map<String, dynamic> toMap() => {
     'name': name,
@@ -41,17 +33,17 @@ class Part {
 
   factory Part.fromMap(Map<String, dynamic> map) => Part(
     name: map['name'] as String,
-    quantity: map['quantity'] as int? ?? 1,
+    quantity: (map['quantity'] as num?)?.toInt() ?? 1,
     unitPrice: (map['unitPrice'] as num?)?.toDouble() ?? 0.0,
   );
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-          other is Part &&
-              name == other.name &&
-              quantity == other.quantity &&
-              unitPrice == other.unitPrice;
+      other is Part &&
+          name == other.name &&
+          quantity == other.quantity &&
+          unitPrice == other.unitPrice;
 
   @override
   int get hashCode => name.hashCode ^ quantity.hashCode ^ unitPrice.hashCode;
@@ -88,14 +80,15 @@ class Consumable {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-          other is Consumable &&
-              name == other.name &&
-              quantity == other.quantity &&
-              unit == other.unit &&
-              unitPrice == other.unitPrice;
+      other is Consumable &&
+          name == other.name &&
+          quantity == other.quantity &&
+          unit == other.unit &&
+          unitPrice == other.unitPrice;
 
   @override
-  int get hashCode => name.hashCode ^ quantity.hashCode ^ unit.hashCode ^ unitPrice.hashCode;
+  int get hashCode =>
+      name.hashCode ^ quantity.hashCode ^ unit.hashCode ^ unitPrice.hashCode;
 }
 
 // 🔹 Modèle principal : Maintenance
@@ -142,7 +135,6 @@ class Maintenance extends Equatable {
     required this.items,
   });
 
-  // Conversion vers Map (pour Firestore)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -163,12 +155,12 @@ class Maintenance extends Equatable {
       'createdAt': createdAt.millisecondsSinceEpoch,
       'updatedAt': updatedAt?.millisecondsSinceEpoch,
       'ownerId': ownerId,
-      'parts': <Map<String, dynamic>>[],
-      'consumables': <Map<String, dynamic>>[],
+      'maintenanceItems': items.map((e) => e.toMap()).toList(),
     };
   }
 
-  // Dans la classe Maintenance, ajoutez cette méthode :
+  static const _unset = Object();
+
   Maintenance copyWith({
     String? id,
     String? userId,
@@ -182,8 +174,8 @@ class Maintenance extends Equatable {
     String? garageContact,
     double? cost,
     String? receiptImageUrl,
-    double? nextDueMileage,
-    DateTime? nextDueDate,
+    Object? nextDueMileage = _unset,
+    Object? nextDueDate = _unset,
     MaintenanceStatus? status,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -203,8 +195,12 @@ class Maintenance extends Equatable {
       garageContact: garageContact ?? this.garageContact,
       cost: cost ?? this.cost,
       receiptImageUrl: receiptImageUrl ?? this.receiptImageUrl,
-      nextDueMileage: nextDueMileage ?? this.nextDueMileage,
-      nextDueDate: nextDueDate ?? this.nextDueDate,
+      nextDueMileage: identical(nextDueMileage, _unset)
+          ? this.nextDueMileage
+          : nextDueMileage as double?,
+      nextDueDate: identical(nextDueDate, _unset)
+          ? this.nextDueDate
+          : nextDueDate as DateTime?,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -213,42 +209,84 @@ class Maintenance extends Equatable {
     );
   }
 
-  // Création depuis Map (Firestore)
+  static DateTime _dateFromFirestore(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.round());
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+    throw FormatException('Invalid date value: $value');
+  }
+
+  static DateTime? _optionalDateFromFirestore(dynamic value) {
+    if (value == null) return null;
+    return _dateFromFirestore(value);
+  }
+
   factory Maintenance.fromMap(Map<String, dynamic> map) {
     final typeStr = map['type'] as String?;
     final statusStr = map['status'] as String?;
 
     return Maintenance(
-      id: map['id'] as String,
-      userId: map['userId'] as String,
-      vehicleId: map['vehicleId'] as String,
+      id: map['id'] as String? ?? '',
+      userId: map['userId'] as String? ?? '',
+      vehicleId: map['vehicleId'] as String? ?? '',
       type: typeStr != null
-          ? MaintenanceType.values.firstWhere((e) => e.name == typeStr, orElse: () => MaintenanceType.other)
+          ? MaintenanceType.values.firstWhere(
+              (e) => e.name == typeStr,
+              orElse: () => MaintenanceType.other,
+            )
           : MaintenanceType.other,
-      title: map['title'] as String,
+      title: map['title'] as String? ?? 'Intervention',
       description: map['description'] as String?,
-      date: DateTime.fromMillisecondsSinceEpoch(map['date'] as int),
-      mileage: (map['mileage'] as num).toDouble(),
+      date: _optionalDateFromFirestore(map['date']) ?? DateTime.now(),
+      mileage: (map['mileage'] as num?)?.toDouble() ?? 0.0,
       garageName: map['garageName'] as String?,
       garageContact: map['garageContact'] as String?,
-      cost: (map['cost'] as num).toDouble(),
+      cost: (map['cost'] as num?)?.toDouble() ?? 0.0,
       receiptImageUrl: map['receiptImageUrl'] as String?,
       nextDueMileage: (map['nextDueMileage'] as num?)?.toDouble(),
-      nextDueDate: map['nextDueDate'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['nextDueDate'] as int)
-          : null,
+      nextDueDate: _optionalDateFromFirestore(map['nextDueDate']),
       status: statusStr != null
-          ? MaintenanceStatus.values.firstWhere((e) => e.name == statusStr, orElse: () => MaintenanceStatus.completed)
+          ? MaintenanceStatus.values.firstWhere(
+              (e) => e.name == statusStr,
+              orElse: () => MaintenanceStatus.completed,
+            )
           : MaintenanceStatus.completed,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int),
+      createdAt: _optionalDateFromFirestore(map['createdAt']) ?? DateTime.now(),
       ownerId: map['ownerId'] as String?,
-      updatedAt:
-      map['updatedAt'] != null ? DateTime.fromMillisecondsSinceEpoch(map['updatedAt'] as int) : null,
-      items: (map['maintenanceItems'] as List?)
-          ?.map((e) => MaintenanceItem.fromMap(e as Map<String, dynamic>))
-          .toList() ??
+      updatedAt: _optionalDateFromFirestore(map['updatedAt']),
+      items:
+          (map['maintenanceItems'] as List?)
+              ?.whereType<Map>()
+              .map((e) => MaintenanceItem.fromMap(Map<String, dynamic>.from(e)))
+              .toList() ??
           [],
     );
+  }
+
+  /// Prochaine échéance encore à venir (date future).
+  bool get hasUpcomingDue {
+    final due = nextDueDate;
+    if (due == null) return false;
+    return due.isAfter(DateTime.now());
+  }
+
+  /// Échéance dépassée (date passée).
+  bool get isDueOverdue {
+    final due = nextDueDate;
+    if (due == null) return false;
+    return due.isBefore(DateTime.now());
+  }
+
+  /// Échéance dans les [withinDays] prochains jours.
+  bool isDueWithinDays(int withinDays) {
+    final due = nextDueDate;
+    if (due == null) return false;
+    final now = DateTime.now();
+    if (due.isBefore(now)) return false;
+    return due.difference(now).inDays <= withinDays;
   }
 
   @override
@@ -271,6 +309,6 @@ class Maintenance extends Equatable {
     createdAt,
     ownerId,
     updatedAt,
+    items,
   ];
-
 }

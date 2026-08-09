@@ -29,12 +29,6 @@ final professionalMaintenancesStreamProvider =
     >((ref, args) {
       final service = ref.watch(maintenanceServiceProvider);
 
-      // Logs pour vérifier les valeurs des arguments
-      print('Request parameters:');
-      print('Professional ID: ${args.professionalId}');
-      print('Vehicle ID: ${args.vehicleId}');
-      print('Client ID: ${args.clientId}');
-
       return service.getProfessionalMaintenancesStream(
         professionalId: args.professionalId,
         vehicleId: args.vehicleId,
@@ -76,6 +70,15 @@ class MaintenanceService {
   // ✅ Supprimer une maintenance
   Future<void> deleteMaintenance(String maintenanceId) async {
     await _firestore.collection('maintenances').doc(maintenanceId).delete();
+  }
+
+  /// Supprime le rappel d'échéance après intervention effectuée.
+  Future<void> clearDueReminder(String maintenanceId) async {
+    await _firestore.collection('maintenances').doc(maintenanceId).update({
+      'nextDueDate': FieldValue.delete(),
+      'nextDueMileage': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   // ✅ Lire les maintenances d'un véhicule (triées par date DESC)
@@ -147,10 +150,6 @@ class MaintenanceService {
     required String vehicleId,
     required String clientId,
   }) {
-    print('🔍 Recherche des maintenances pour:');
-    print('   - vehicleId: $vehicleId');
-    print('   - clientId: $clientId');
-
     return _firestore
         .collection('maintenances')
         .where('vehicleId', isEqualTo: vehicleId)
@@ -161,19 +160,12 @@ class MaintenanceService {
         .orderBy('date', descending: true)
         .snapshots()
         .handleError((error) {
-          print('❌ Erreur Firestore: $error');
           throw error;
         })
         .map((snapshot) {
-          print('📊 Nombre de documents trouvés: ${snapshot.docs.length}');
-
           final maintenances = snapshot.docs.map((doc) {
             final data = doc.data();
             data['id'] = doc.id;
-
-            // Debug: afficher chaque document
-            print('📄 Document ${doc.id}: ${data}');
-
             return Maintenance.fromMap(data);
           }).toList();
 

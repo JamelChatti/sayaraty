@@ -5,12 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/utils/currency_formatter.dart';
+import '../../../../core/security/password_confirm_dialog.dart';
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../auth/domain/models/user_model.dart';
 import '../../../settings/application/settings_service.dart';
 import '../../../settings/domain/app_settings.dart';
 import '../../application/maintenance_service.dart';
 import '../../domain/models/maintenance_model.dart';
+import '../widgets/maintenance_due_banner.dart';
+import 'maintenance_detail_sceen.dart';
+import '../../../../app/app_theme.dart';
 
 class MaintenanceListScreen extends ConsumerWidget {
   final String vehicleId;
@@ -29,12 +33,13 @@ class MaintenanceListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(authStateNotifierProvider);
-    final currency = ref.watch(appSettingsProvider).asData?.value.currency ?? CurrencyEnum.eur;
+    final currency =
+        ref.watch(appSettingsProvider).asData?.value.currency ??
+        CurrencyEnum.eur;
 
     return userAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, _) => Scaffold(
         body: Center(child: Text('Erreur d\'authentification : $err')),
       ),
@@ -46,29 +51,21 @@ class MaintenanceListScreen extends ConsumerWidget {
           return const SizedBox();
         }
 
-        print('👤 Utilisateur connecté:');
-        print('   - ID: ${user.uid}');
-        print('   - Rôle: ${user.role}');
-        print('   - UserType: ${user.userType}');
-        print('   - Client ID fourni: $ownerId');
-        print('   - Vehicle ID: $vehicleId');
-
-        // ✅ CORRIGÉ : Utiliser la méthode correcte pour déterminer l'ID
+        final isProfessional =
+            user.role == 'pro' || user.userType == 'professional';
         final userIdForQuery = _getUserIdForQuery(user, ownerId);
-        print('🔍 ID utilisateur pour la requête: $userIdForQuery');
 
-        // ✅ CORRIGÉ : Utiliser le provider du service
         final maintenancesAsync = ref.watch(
-          (user.role == 'pro' || user.userType == 'professional')
+          isProfessional
               ? professionalMaintenancesStreamProvider((
-              professionalId: user.uid,
-              vehicleId: vehicleId,
-              clientId: userIdForQuery!,
-          ))
+                  professionalId: user.uid,
+                  vehicleId: vehicleId,
+                  clientId: userIdForQuery!,
+                ))
               : maintenancesStreamProvider((
-              userId: userIdForQuery!,
-              vehicleId: vehicleId,
-          )),
+                  userId: userIdForQuery!,
+                  vehicleId: vehicleId,
+                )),
         );
 
         return Scaffold(
@@ -104,10 +101,7 @@ class MaintenanceListScreen extends ConsumerWidget {
           ),
           body: maintenancesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, stackTrace) {
-              print('❌ Erreur de chargement: $err');
-              print('Stack trace: $stackTrace');
-
+            error: (err, _) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -130,16 +124,16 @@ class MaintenanceListScreen extends ConsumerWidget {
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () => ref.refresh(
-                        (user.role == 'pro' || user.userType == 'professional')
+                        isProfessional
                             ? professionalMaintenancesStreamProvider((
-                            professionalId: user.uid,
-                            vehicleId: vehicleId,
-                            clientId: userIdForQuery,
-                        ))
+                                professionalId: user.uid,
+                                vehicleId: vehicleId,
+                                clientId: userIdForQuery,
+                              ))
                             : maintenancesStreamProvider((
-                            userId: userIdForQuery,
-                            vehicleId: vehicleId,
-                        )),
+                                userId: userIdForQuery,
+                                vehicleId: vehicleId,
+                              )),
                       ),
                       child: const Text('Réessayer'),
                     ),
@@ -148,8 +142,6 @@ class MaintenanceListScreen extends ConsumerWidget {
               );
             },
             data: (maintenances) {
-              print('✅ Nombre de maintenances chargées: ${maintenances.length}');
-
               if (maintenances.isEmpty) {
                 return Center(
                   child: Column(
@@ -182,18 +174,56 @@ class MaintenanceListScreen extends ConsumerWidget {
                 );
               }
 
-              return ListView.builder(
-                itemCount: maintenances.length,
-                itemBuilder: (context, index) {
-                  final maintenance = maintenances[index];
-                  return _MaintenanceListItem(
-                    maintenance: maintenance,
-                    currency: currency,
-                    canEdit: _canEditMaintenance(user, maintenance, ownerId),
-                    onEdit: () => context.push('/maintenance/edit/${maintenance.id}'),
-                    onDelete: () => _deleteMaintenance(context, ref, maintenance.id),
+              final canDismissDue = _canDismissDueReminder(user, ownerId) &&
+                  maintenances.any(
+                    (m) => m.isDueOverdue || m.isDueWithinDays(30),
                   );
-                },
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  MaintenanceDueBanner(
+                    maintenances: maintenances,
+                    canDismiss: canDismissDue,
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: maintenances.length,
+                      itemBuilder: (context, index) {
+                        final maintenance = maintenances[index];
+                        return _MaintenanceListItem(
+                          maintenance: maintenance,
+                          currency: currency,
+                          canEdit: _canEditMaintenance(
+                            user,
+                            maintenance,
+                            ownerId,
+                          ),
+                          canDismissDue: canDismissDue &&
+                              maintenance.nextDueDate != null &&
+                              (maintenance.isDueOverdue ||
+                                  maintenance.isDueWithinDays(30)),
+                          onDismissDue: () => _dismissDueReminder(
+                            context,
+                            ref,
+                            maintenance,
+                          ),
+                          vehicleName: vehicleName,
+                          onEdit: () => context.push(
+                            '/maintenance/edit/${maintenance.id}',
+                            extra: {
+                              'maintenance': maintenance,
+                              'vehicleName': vehicleName,
+                            },
+                          ),
+                          onDelete: () =>
+                              _deleteMaintenance(context, ref, maintenance.id),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -205,7 +235,8 @@ class MaintenanceListScreen extends ConsumerWidget {
   // ✅ CORRIGÉ : Méthode unique pour déterminer l'ID utilisateur
   String? _getUserIdForQuery(AppUser user, String? providedClientId) {
     // Pour un professionnel, utiliser l'ID du client fourni
-    if ((user.role == 'pro' || user.userType == 'professional') && providedClientId != null) {
+    if ((user.role == 'pro' || user.userType == 'professional') &&
+        providedClientId != null) {
       return providedClientId;
     }
     // Pour un propriétaire, utiliser son propre ID
@@ -214,10 +245,10 @@ class MaintenanceListScreen extends ConsumerWidget {
 
   // ✅ CORRIGÉ : Vérifier les permissions d'ajout
   Future<bool> _checkAddPermission(
-      WidgetRef ref,
-      AppUser user,
-      String vehicleId,
-      ) async {
+    WidgetRef ref,
+    AppUser user,
+    String vehicleId,
+  ) async {
     // Si l'utilisateur est propriétaire
     if (user.role != 'pro' && user.userType != 'professional') {
       return true;
@@ -238,20 +269,69 @@ class MaintenanceListScreen extends ConsumerWidget {
       );
 
       final userAccess = sharedList.firstWhere(
-            (access) => access['userId'] == user.uid,
+        (access) => access['userId'] == user.uid,
         orElse: () => {},
       );
 
       final permissions = List<String>.from(userAccess['permissions'] ?? []);
       return permissions.contains('maintenance_add');
-    } catch (e) {
-      print('Erreur lors de la vérification des permissions: $e');
+    } catch (_) {
       return false;
     }
   }
 
+  // Propriétaire du véhicule : peut masquer les rappels d'échéance
+  bool _canDismissDueReminder(AppUser user, String? ownerId) {
+    if (user.role == 'pro' || user.userType == 'professional') {
+      return false;
+    }
+    if (ownerId != null && ownerId != user.uid) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _dismissDueReminder(
+    BuildContext context,
+    WidgetRef ref,
+    Maintenance maintenance,
+  ) async {
+    final confirmed = await confirmWithPassword(
+      context,
+      title: 'Maintenance effectuée ?',
+      message:
+          'Confirmer que « ${maintenance.title} » a été effectuée ?\n'
+          'Le rappel d\'échéance ne sera plus affiché.\n'
+          'Entrez votre mot de passe pour confirmer.',
+      confirmLabel: 'Confirmer',
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref
+          .read(maintenanceServiceProvider)
+          .clearDueReminder(maintenance.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rappel d\'échéance supprimé')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e')),
+        );
+      }
+    }
+  }
+
   // ✅ CORRIGÉ : Vérifier les permissions d'édition/suppression
-  bool _canEditMaintenance(AppUser user, Maintenance maintenance, String? ownerId) {
+  bool _canEditMaintenance(
+    AppUser user,
+    Maintenance maintenance,
+    String? ownerId,
+  ) {
     // Un propriétaire peut éditer ses propres maintenances
     if (user.role != 'pro' && user.userType != 'professional') {
       return maintenance.userId == user.uid;
@@ -262,30 +342,26 @@ class MaintenanceListScreen extends ConsumerWidget {
   }
 
   // ✅ CORRIGÉ : Méthode de suppression
-  Future<void> _deleteMaintenance(BuildContext context, WidgetRef ref, String maintenanceId) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer ?'),
-        content: const Text(
-          'Êtes-vous sûr de vouloir supprimer cette intervention ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _deleteMaintenance(
+    BuildContext context,
+    WidgetRef ref,
+    String maintenanceId,
+  ) async {
+    final confirm = await confirmWithPassword(
+      context,
+      title: 'Supprimer ?',
+      message:
+          'Êtes-vous sûr de vouloir supprimer cette intervention ?\n'
+          'Entrez votre mot de passe pour confirmer.',
+      confirmLabel: 'Supprimer',
+      isDestructive: true,
     );
 
     if (confirm == true) {
       try {
-        await ref.read(maintenanceServiceProvider).deleteMaintenance(maintenanceId);
+        await ref
+            .read(maintenanceServiceProvider)
+            .deleteMaintenance(maintenanceId);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Intervention supprimée')),
@@ -293,9 +369,9 @@ class MaintenanceListScreen extends ConsumerWidget {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erreur : $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Erreur : $e')));
         }
       }
     }
@@ -306,36 +382,48 @@ class _MaintenanceListItem extends StatelessWidget {
   final Maintenance maintenance;
   final CurrencyEnum currency;
   final bool canEdit;
+  final bool canDismissDue;
+  final VoidCallback onDismissDue;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final String vehicleName;
 
   const _MaintenanceListItem({
     required this.maintenance,
     required this.currency,
     required this.canEdit,
+    this.canDismissDue = false,
+    required this.onDismissDue,
     required this.onEdit,
     required this.onDelete,
+    required this.vehicleName,
   });
 
   @override
   Widget build(BuildContext context) {
     final formattedCost = formatCurrency(maintenance.cost, currency);
     final statusColor = _getStatusColor(maintenance.status);
+    final typeColor = _getTypeColor(maintenance.type);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         leading: Container(
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: _getTypeColor(maintenance.type),
+            color: typeColor.withValues(alpha: 0.14),
             shape: BoxShape.circle,
           ),
           child: Icon(
             _getTypeIcon(maintenance.type),
-            color: Colors.white,
+            color: typeColor,
             size: 24,
           ),
         ),
@@ -351,11 +439,15 @@ class _MaintenanceListItem extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: statusColor.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 _getStatusLabel(maintenance.status),
-                style: TextStyle(color: statusColor, fontSize: 12),
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -364,49 +456,107 @@ class _MaintenanceListItem extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '📆 ${_formatDate(maintenance.date)} • 🛞 ${maintenance.mileage.toStringAsFixed(0)} km',
+              '${_formatDate(maintenance.date)} • ${maintenance.mileage.toStringAsFixed(0)} km',
             ),
-            if (maintenance.garageName != null && maintenance.garageName!.isNotEmpty)
-              Text('📍 ${maintenance.garageName!}'),
-            Text('💰 $formattedCost'),
+            if (maintenance.garageName != null &&
+                maintenance.garageName!.isNotEmpty)
+              Text(maintenance.garageName!),
+            Text(
+              formattedCost,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             if (maintenance.items.isNotEmpty)
-              Text('🔧 ${maintenance.items.length} élément(s)'),
+              Text('${maintenance.items.length} élément(s)'),
+            if (maintenance.nextDueDate != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DueChip(maintenance: maintenance),
+                  ),
+                  if (canDismissDue)
+                    TextButton.icon(
+                      onPressed: onDismissDue,
+                      icon: const Icon(Icons.check_circle_outline, size: 16),
+                      label: const Text('Effectuée'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
-        trailing: canEdit
+        trailing: (canEdit || canDismissDue)
             ? PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'edit') onEdit();
-            if (value == 'delete') onDelete();
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  Icon(Icons.edit, size: 20),
-                  SizedBox(width: 8),
-                  Text('Modifier'),
+                onSelected: (value) {
+                  if (value == 'details') {
+                    _openDetails(context);
+                  } else if (value == 'edit') {
+                    onEdit();
+                  } else if (value == 'delete') {
+                    onDelete();
+                  } else if (value == 'dismiss_due') {
+                    onDismissDue();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'details',
+                    child: ListTile(
+                      leading: Icon(Icons.visibility, color: Colors.blue),
+                      title: Text('Détails'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  if (canDismissDue)
+                    const PopupMenuItem(
+                      value: 'dismiss_due',
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.notifications_off,
+                          color: Colors.green,
+                        ),
+                        title: Text('Masquer le rappel'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  if (canEdit) ...[
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: ListTile(
+                        leading: Icon(Icons.edit, color: Colors.orange),
+                        title: Text('Modifier'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(Icons.delete, color: Colors.red),
+                        title: Text('Supprimer'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
                 ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete, color: Colors.red, size: 20),
-                  SizedBox(width: 8),
-                  Text('Supprimer', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-            ),
-          ],
-        )
-            : null,
-        onTap: () {
-          // Optionnel : Afficher plus de détails
-          // context.push('/maintenance/detail/${maintenance.id}');
-        },
+              )
+            : const Icon(Icons.chevron_right),
+        onTap: () => _openDetails(context),
+      ),
+    );
+  }
+
+  void _openDetails(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MaintenanceDetailScreen(
+          maintenance: maintenance,
+          vehicleName: vehicleName,
+        ),
       ),
     );
   }
@@ -427,6 +577,8 @@ class _MaintenanceListItem extends StatelessWidget {
         return Colors.blue;
       case MaintenanceType.repair:
         return Colors.redAccent;
+      case MaintenanceType.fuel:
+        return Colors.orangeAccent;
       case MaintenanceType.other:
         return Colors.grey;
     }
@@ -447,6 +599,8 @@ class _MaintenanceListItem extends StatelessWidget {
       case MaintenanceType.technicalInspection:
         return Icons.checklist;
       case MaintenanceType.repair:
+        return Icons.build;
+      case MaintenanceType.fuel:
         return Icons.build;
       case MaintenanceType.other:
         return Icons.more_horiz;
@@ -473,6 +627,46 @@ class _MaintenanceListItem extends StatelessWidget {
       case MaintenanceStatus.canceled:
         return 'Annulée';
     }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+}
+
+class _DueChip extends StatelessWidget {
+  final Maintenance maintenance;
+
+  const _DueChip({required this.maintenance});
+
+  @override
+  Widget build(BuildContext context) {
+    final due = maintenance.nextDueDate!;
+    final overdue = maintenance.isDueOverdue;
+    final soon = maintenance.isDueWithinDays(30);
+    final color = overdue
+        ? AppTheme.overdue
+        : soon
+        ? AppTheme.dueSoon
+        : Colors.grey;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        overdue
+            ? 'Échéance dépassée : ${_formatDate(due)}'
+            : 'Échéance : ${_formatDate(due)}',
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 
   String _formatDate(DateTime date) {

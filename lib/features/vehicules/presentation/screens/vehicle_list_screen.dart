@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../auth/domain/models/user_model.dart';
+import '../../../../core/security/password_confirm_dialog.dart';
 import '../../application/vehicle_providers.dart';
 import '../../application/vehicle_service.dart' hide vehiclesStreamProvider;
 import 'full_screen_image.dart';
@@ -15,10 +16,12 @@ class VehicleListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userState = ref.watch<AsyncValue<AppUser?>>(authStateNotifierProvider);
+    final userState = ref.watch<AsyncValue<AppUser?>>(
+      authStateNotifierProvider,
+    );
     return userState.when(
       loading: () =>
-      const Scaffold(body: Center(child: CircularProgressIndicator())),
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, stack) =>
           Scaffold(body: Center(child: Text('Erreur: $err'))),
       data: (user) {
@@ -41,28 +44,18 @@ class _VehicleListBody extends ConsumerWidget {
   const _VehicleListBody({required this.userId});
 
   Future<void> _showDeleteDialog(
-      BuildContext context,
-      WidgetRef ref,
-      String vehicleId,
-      ) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer ce véhicule ?'),
-        content: const Text(
-          'Toutes les interventions liées seront aussi supprimées.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    BuildContext context,
+    WidgetRef ref,
+    String vehicleId,
+  ) async {
+    final confirm = await confirmWithPassword(
+      context,
+      title: 'Supprimer ce véhicule ?',
+      message:
+          'Toutes les interventions liées seront aussi supprimées.\n'
+          'Entrez votre mot de passe pour confirmer.',
+      confirmLabel: 'Supprimer',
+      isDestructive: true,
     );
 
     if (confirm == true) {
@@ -81,7 +74,7 @@ class _VehicleListBody extends ConsumerWidget {
 
     return vehiclesAsync.when(
       loading: () =>
-      const Scaffold(body: Center(child: CircularProgressIndicator())),
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, stack) =>
           Scaffold(body: Center(child: Text('Erreur: $err'))),
       data: (vehicles) {
@@ -89,15 +82,17 @@ class _VehicleListBody extends ConsumerWidget {
           appBar: AppBar(
             title: Row(
               children: [
-                Container(
-                  color: const Color(0xFFF5F7FB),
-                  child: Image.asset(
-                    'assets/images/logo_sayaraty.png',
-                    height: 65,
-                  ),
+                Image.asset(
+                  'assets/images/logo_sayaraty.png',
+                  height: 36,
                 ),
                 const SizedBox(width: 8),
-                const Text('Sayaraty'),
+                const Flexible(
+                  child: Text(
+                    'Sayaraty',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             actions: [
@@ -110,177 +105,224 @@ class _VehicleListBody extends ConsumerWidget {
                 onPressed: () => context.push('/vehicles/add'),
               ),
               IconButton(
-                icon: const Icon(Icons.group, color: Colors.green),  // Icône pour la famille/entreprise
-                onPressed: () => context.push('/vehicles/share'),  // Route à définir
+                icon: const Icon(
+                  Icons.group,
+                  color: Colors.green,
+                ), // Icône pour la famille/entreprise
+                onPressed: () =>
+                    context.push('/vehicles/share'), // Route à définir
               ),
             ],
           ),
 
           body: vehicles.isEmpty
               ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.directions_car, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
-                  'Aucun véhicule',
-                  style: TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Ajoutez votre premier véhicule pour commencer à suivre son entretien.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          )
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.directions_car, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text(
+                        'Aucun véhicule',
+                        style: TextStyle(fontSize: 18, color: Colors.grey),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Ajoutez votre premier véhicule pour commencer à suivre son entretien.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )
               : ListView.builder(
-            itemCount: vehicles.length,
-            itemBuilder: (context, index) {
-              final vehicle = vehicles[index];
-              final title = '${vehicle.brand} ${vehicle.model}';
-              final subtitle =
-                  vehicle.plateNumber ?? 'Immatriculation inconnue';
+                  itemCount: vehicles.length,
+                  itemBuilder: (context, index) {
+                    final vehicle = vehicles[index];
+                    final title = '${vehicle.brand} ${vehicle.model}';
+                    final subtitle =
+                        vehicle.plateNumber ?? 'Immatriculation inconnue';
 
-              return Dismissible(
-                key: Key(vehicle.id),
-                background: Container(
-                  color: Colors.red,
-                  child: const Icon(Icons.delete, color: Colors.white),
-                ),
-                onDismissed: (_) async {
-                  await ref
-                      .read(vehicleServiceProvider)
-                      .deleteVehicle(vehicle.id);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Véhicule supprimé')),
-                    );
-                  }
-                },
-                child: ListTile(
-                  title: Text(title),
-                  subtitle: Text(subtitle),
-                  leading: GestureDetector(
-                    onTap: () {
-                      if (vehicle.mainPhotoUrl == null) return;
-
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => FullScreenImage(
-                            imageUrl: vehicle.mainPhotoUrl!,
-                          ),
+                    return Dismissible(
+                      key: Key(vehicle.id),
+                      background: Container(
+                        color: Colors.red,
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      confirmDismiss: (_) => confirmWithPassword(
+                        context,
+                        title: 'Supprimer ce véhicule ?',
+                        message:
+                            'Toutes les interventions liées seront aussi '
+                            'supprimées.\nEntrez votre mot de passe pour confirmer.',
+                        confirmLabel: 'Supprimer',
+                        isDestructive: true,
+                      ),
+                      onDismissed: (_) async {
+                        await ref
+                            .read(vehicleServiceProvider)
+                            .deleteVehicle(vehicle.id);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Véhicule supprimé')),
+                          );
+                        }
+                      },
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
                         ),
-                      );
-                    },
-                    child: Hero(
-                      tag: vehicle.id,
-                      child: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.grey[200],
-                        child: vehicle.mainPhotoUrl != null
-                            ? CachedNetworkImage(
-                          imageUrl: vehicle.mainPhotoUrl!,
-                          fit: BoxFit.cover,
-                          width: 48,
-                          height: 48,
-                          placeholder: (context, url) =>
-                          const CircularProgressIndicator(
-                            valueColor:
-                            AlwaysStoppedAnimation<Color>(
-                              Colors.grey,
+                        child: ListTile(
+                          title: Text(
+                            title,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(subtitle),
+                          leading: GestureDetector(
+                            onTap: () {
+                              if (vehicle.mainPhotoUrl == null) return;
+
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => FullScreenImage(
+                                    imageUrl: vehicle.mainPhotoUrl!,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Hero(
+                              tag: vehicle.id,
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundColor: Colors.grey[200],
+                                child: vehicle.mainPhotoUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: vehicle.mainPhotoUrl!,
+                                        fit: BoxFit.cover,
+                                        width: 48,
+                                        height: 48,
+                                        placeholder: (context, url) =>
+                                            const CircularProgressIndicator(
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.grey,
+                                                  ),
+                                              strokeWidth: 2,
+                                            ),
+                                        errorWidget: (context, url, error) =>
+                                            const Icon(
+                                              Icons.directions_car,
+                                              color: Colors.grey,
+                                            ),
+                                      )
+                                    : const Icon(
+                                        Icons.directions_car,
+                                        color: Colors.grey,
+                                      ),
+                              ),
                             ),
-                            strokeWidth: 2,
                           ),
-                          errorWidget: (context, url, error) =>
-                          const Icon(
-                            Icons.directions_car,
-                            color: Colors.grey,
+                          onTap: () => context.push(
+                            '/maintenance',
+                            extra: {
+                              'ownerId': vehicle.ownerId,
+                              'vehicleId': vehicle.id,
+                              'vehicleName': title,
+                            },
                           ),
-                        )
-                            : const Icon(
-                          Icons.directions_car,
-                          color: Colors.grey,
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                context.push('/vehicles/edit/${vehicle.id}');
+                              } else if (value == 'delete') {
+                                _showDeleteDialog(context, ref, vehicle.id);
+                              } else if (value == 'details') {
+                                context.push(
+                                  '/vehicles/detail/${vehicle.id}',
+                                  extra: vehicle,
+                                );
+                              } else if (value == 'share') {
+                                context.push('/vehicles/share', extra: vehicle);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.edit,
+                                      size: 20,
+                                      color: Colors.blue,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Modifier',
+                                      style: TextStyle(color: Colors.blue),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'details',
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.info_outline,
+                                      size: 20,
+                                      color: Colors.green,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Détails',
+                                      style: TextStyle(color: Colors.green),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'share',
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.share,
+                                      size: 20,
+                                      color: Colors.orange,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Partager',
+                                      style: TextStyle(color: Colors.orange),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuDivider(),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.delete,
+                                      size: 20,
+                                      color: Colors.red,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Supprimer',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  onTap: () => context.push(
-                    '/maintenance',
-                    extra: {
-                      'ownerId':vehicle.ownerId,
-                      'vehicleId': vehicle.id,
-                      'vehicleName': title,
-                    },
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-              if (value == 'edit') {
-              context.push('/vehicles/edit/${vehicle.id}');
-              } else if (value == 'delete') {
-              _showDeleteDialog(context, ref, vehicle.id);
-              } else if (value == 'details') {
-              context.push(
-              '/vehicles/detail/${vehicle.id}',
-              extra: vehicle,
-              );
-              } else if (value == 'share') {
-              context.push(
-              '/vehicles/share',
-              extra: vehicle,
-              );
-              }
-              },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.edit, size: 20, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Text('Modifier', style: TextStyle(color: Colors.blue)),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'details',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline, size: 20, color: Colors.green),
-                        const SizedBox(width: 8),
-                        Text('Détails', style: TextStyle(color: Colors.green)),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'share',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.share, size: 20, color: Colors.orange),
-                        const SizedBox(width: 8),
-                        Text('Partager', style: TextStyle(color: Colors.orange)),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.delete, size: 20, color: Colors.red),
-                        const SizedBox(width: 8),
-                        Text('Supprimer', style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         );
       },
     );

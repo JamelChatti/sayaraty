@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/security/password_confirm_dialog.dart';
 import '../../application/vehicle_service.dart';
 import '../../domain/models/vehicule_model.dart';
 
@@ -62,13 +63,7 @@ class VehicleDetailScreen extends ConsumerWidget {
                         onLongPress: (){
 
                         },
-                        onTap: () async {
-                          final updated = vehicle.copyWith(mainPhotoUrl: url);
-                          await ref.read(vehicleServiceProvider).updateVehicle(updated);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Image choisi avec succès !')),
-                          );
-                        },
+                        onTap: () => _confirmSetMainPhoto(context, ref, url, isMain),
                         child: Stack(
                           children: [
                             ClipRRect(
@@ -106,6 +101,40 @@ class VehicleDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmSetMainPhoto(
+    BuildContext context,
+    WidgetRef ref,
+    String url,
+    bool isMain,
+  ) async {
+    if (isMain) return;
+
+    final confirmed = await confirmWithPassword(
+      context,
+      title: 'Photo principale',
+      message:
+          'Voulez-vous définir cette photo comme photo principale '
+          'du véhicule ?\nEntrez votre mot de passe pour confirmer.',
+      confirmLabel: 'Confirmer',
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      final updated = vehicle.copyWith(mainPhotoUrl: url);
+      await ref.read(vehicleServiceProvider).updateVehicle(updated);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo principale mise à jour')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur : $e')),
+      );
+    }
   }
 
   Widget _buildDetailRow(String label, String value) {

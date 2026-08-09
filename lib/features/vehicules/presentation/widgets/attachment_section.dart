@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/attachment_service.dart';
 import '../../application/vehicle_service.dart';
+import '../../../../core/security/password_confirm_dialog.dart';
 import '../screens/full_screen_image.dart';
 
 class AttachmentSection extends ConsumerWidget {
@@ -168,27 +169,15 @@ class _AttachmentContentState
       fileType = 'PDF';
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text(
-          'Êtes-vous sûr de vouloir supprimer ce $fileType ? Cette action est irréversible.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              'Supprimer',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
+    final confirmed = await confirmWithPassword(
+      context,
+      title: 'Confirmer la suppression',
+      message:
+          'Êtes-vous sûr de vouloir supprimer ce $fileType ? '
+          'Cette action est irréversible.\n'
+          'Entrez votre mot de passe pour confirmer.',
+      confirmLabel: 'Supprimer',
+      isDestructive: true,
     );
 
     if (confirmed == true) {

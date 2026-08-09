@@ -41,23 +41,11 @@ final routerProvider = Provider<GoRouter>((ref) {
 
     routes: [
       // ✅ ROUTE ROOT
-      GoRoute(
-        path: '/',
-        redirect: (_, __) => '/home',
-      ),
+      GoRoute(path: '/', redirect: (_, __) => '/home'),
 
-      GoRoute(
-        path: '/login',
-        builder: (_, __) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/signup',
-        builder: (_, __) => const SignUpScreen(),
-      ),
-      GoRoute(
-        path: '/home',
-        builder: (_, __) => const HomeRedirector(),
-      ),
+      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
+      GoRoute(path: '/home', builder: (_, __) => const HomeRedirector()),
       GoRoute(
         path: '/vehicles/add',
         builder: (_, __) => const AddVehicleScreen(),
@@ -67,22 +55,27 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final extra = state.extra;
           if (extra == null || extra is! Map) {
-            return const Scaffold(body: Center(child: Text('Données manquantes')));
+            return const Scaffold(
+              body: Center(child: Text('Données manquantes')),
+            );
           }
           final args = extra as Map<String, dynamic>;
-          final ownerId = args['ownerId'] as String?;  // ← Ajout de ownerId
+          final ownerId = args['ownerId'] as String?;
           final vehicleId = args['vehicleId'] as String?;
           final vehicleName = args['vehicleName'] as String?;
+          final clientName = args['clientName'] as String?;
 
-          // Vérifier que tous les paramètres sont présents
-          if (ownerId == null || vehicleId == null || vehicleName == null) {
-            return const Scaffold(body: Center(child: Text('Données invalides')));
+          if (vehicleId == null || vehicleName == null) {
+            return const Scaffold(
+              body: Center(child: Text('Données invalides')),
+            );
           }
 
           return MaintenanceListScreen(
-            ownerId: ownerId,  // ← Passe l'ownerId au constructeur
+            ownerId: ownerId,
             vehicleId: vehicleId,
             vehicleName: vehicleName,
+            clientName: clientName,
           );
         },
       ),
@@ -110,7 +103,9 @@ final routerProvider = Provider<GoRouter>((ref) {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Données incomplètes pour créer une maintenance'),
+                    const Text(
+                      'Données incomplètes pour créer une maintenance',
+                    ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () => context.go('/'),
@@ -132,8 +127,27 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/maintenance/edit/:id',
         builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return EditMaintenanceScreen(maintenanceId: id);
+          // 1. On extrait l'objet extra et on le caste en Map
+          final args = state.extra as Map<String, dynamic>?;
+
+          // 2. On vérifie si args est null ou si les données manquent
+          if (args == null) {
+            return const Scaffold(
+              body: Center(
+                child: Text('Erreur : Données de modification manquantes'),
+              ),
+            );
+          }
+
+          // 3. On récupère les objets typés depuis la Map
+          final maintenance = args['maintenance'];
+          final vehicleName = args['vehicleName'];
+
+          // 4. On retourne l'écran avec les paramètres requis
+          return EditMaintenanceScreen(
+            maintenance: maintenance,
+            vehicleName: vehicleName,
+          );
         },
       ),
       GoRoute(
@@ -146,7 +160,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/vehicles/edit/:id', // 👈 ajoutez ":id"
         builder: (context, state) {
           final vehicleId = state.pathParameters['id']!;
-          return EditVehicleScreen(vehicleId: vehicleId); // 👈 passez l'ID, pas l'objet complet
+          return EditVehicleScreen(
+            vehicleId: vehicleId,
+          ); // 👈 passez l'ID, pas l'objet complet
         },
       ),
       GoRoute(
@@ -156,7 +172,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           // Pour l'instant, on suppose qu'il est passé via extra (solution rapide)
           final vehicle = state.extra as Vehicle?;
           if (vehicle == null) {
-            return const Scaffold(body: Center(child: Text('Véhicule non trouvé')));
+            return const Scaffold(
+              body: Center(child: Text('Véhicule non trouvé')),
+            );
           }
           return VehicleDetailScreen(vehicle: vehicle);
         },
@@ -166,20 +184,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final vehicle = state.extra as Vehicle?;
           if (vehicle == null) {
-            return const Scaffold(body: Center(child: Text('Véhicule non trouvé')));
+            return const Scaffold(
+              body: Center(child: Text('Véhicule non trouvé')),
+            );
           }
-          return AttachmentSection(vehicleId: vehicle.id, ); // 👈 Vous devrez créer AttachedScreen
+          return AttachmentSection(
+            vehicleId: vehicle.id,
+          ); // 👈 Vous devrez créer AttachedScreen
         },
       ),
       GoRoute(
         path: '/vehicles/share',
         builder: (context, state) {
-
           return SharedVehiclesListScreen();
         },
       ),
-
     ],
   );
 });
-

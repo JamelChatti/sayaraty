@@ -42,4 +42,11 @@ class SettingsService {
     // Et déconnecter de Firebase
     await FirebaseAuth.instance.signOut();
   }
+
+  final currencyProvider = Provider<CurrencyEnum>((ref) {
+    final settings = ref.watch(appSettingsProvider).asData?.value;
+    return settings?.currency ?? CurrencyEnum.eur;
+  });
+
+
 }

@@ -1,17 +1,24 @@
-// lib/features/maintenance/presentation/screens/edit_maintenance_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
+import '../../../../core/utils/currency_formatter.dart';
+import '../../../../core/security/password_confirm_dialog.dart';
 import '../../../auth/application/auth_state_notifier.dart';
-import '../../../auth/domain/models/user_model.dart';
+import '../../../settings/application/currency_provider.dart';
 import '../../application/maintenance_service.dart';
+import '../../domain/models/maintenance_item.dart';
 import '../../domain/models/maintenance_model.dart';
 
 class EditMaintenanceScreen extends ConsumerStatefulWidget {
-  final String maintenanceId;
+  final Maintenance maintenance;
+  final String vehicleName;
 
-  const EditMaintenanceScreen({super.key, required this.maintenanceId});
+  const EditMaintenanceScreen({
+    super.key,
+    required this.maintenance,
+    required this.vehicleName,
+  });
 
   @override
   ConsumerState<EditMaintenanceScreen> createState() =>
@@ -19,319 +26,625 @@ class EditMaintenanceScreen extends ConsumerStatefulWidget {
 }
 
 class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  // Contrôleurs
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _garageNameController;
   late final TextEditingController _garageContactController;
   late final TextEditingController _costController;
   late final TextEditingController _mileageController;
+  late final TextEditingController _fuelVolumeController;
+  late final TextEditingController _fuelUnitPriceController;
 
-  Maintenance? _maintenance;
+  // État
+  late DateTime _selectedDate;
+  late double _selectedMileage;
+  late MaintenanceType _selectedType;
+  DateTime? _nextDueDate;
+  double? _nextDueMileage;
+
+  // Listes pour les items
+  List<MaintenanceItem> _fixedItems = [];
+  final List<MaintenanceItem> _otherItems = [];
+  final List<TextEditingController> _otherNameControllers = [];
+  final List<TextEditingController> _otherPriceControllers = [];
+  final List<TextEditingController> _otherQtyControllers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final m = widget.maintenance;
+
+    _titleController = TextEditingController(text: m.title);
+    _descriptionController = TextEditingController(text: m.description);
+    _garageNameController = TextEditingController(text: m.garageName);
+    _garageContactController = TextEditingController(text: m.garageContact);
+    _costController = TextEditingController(text: m.cost.toString());
+    _mileageController = TextEditingController(
+      text: m.mileage.toStringAsFixed(0),
+    );
+
+    _selectedDate = m.date;
+    _selectedMileage = m.mileage;
+    _selectedType = m.type;
+    _nextDueDate = m.nextDueDate;
+    _nextDueMileage = m.nextDueMileage;
+
+    _fuelVolumeController = TextEditingController();
+    _fuelUnitPriceController = TextEditingController();
+
+    if (_selectedType == MaintenanceType.fuel && m.items.isNotEmpty) {
+      _fuelVolumeController.text = m.items.first.quantity.toString();
+      _fuelUnitPriceController.text = m.items.first.price.toString();
+    }
+
+    _initItems(m.items);
+  }
+
+  void _initItems(List<MaintenanceItem> items) {
+    final fixedNames = [
+      'Filtre à huile',
+      'Filtre à air',
+      'Filtre habitacle',
+      'Filtre à carburant',
+      'Huile moteur',
+    ];
+
+    _fixedItems = fixedNames.map((name) {
+      final existing = items.where((i) => i.name == name).firstOrNull;
+      return existing?.copyWith(isSelected: true) ??
+          MaintenanceItem(name: name, category: 'fixed', isSelected: false);
+    }).toList();
+
+    final others = items
+        .where((i) => !fixedNames.contains(i.name) && i.category != 'fuel')
+        .toList();
+    for (var item in others) {
+      _otherItems.add(item);
+      _otherNameControllers.add(TextEditingController(text: item.name));
+      _otherPriceControllers.add(
+        TextEditingController(text: item.price.toString()),
+      );
+      _otherQtyControllers.add(
+        TextEditingController(text: item.quantity.toString()),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _garageNameController.dispose();
+    _garageContactController.dispose();
+    _costController.dispose();
+    _mileageController.dispose();
+    _fuelVolumeController.dispose();
+    _fuelUnitPriceController.dispose();
+    for (var c in _otherNameControllers) {
+      c.dispose();
+    }
+    for (var c in _otherPriceControllers) {
+      c.dispose();
+    }
+    for (var c in _otherQtyControllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  double _calculateTotalCost() {
+    if (_selectedType == MaintenanceType.fuel) {
+      final vol = double.tryParse(_fuelVolumeController.text) ?? 0;
+      final unit = double.tryParse(_fuelUnitPriceController.text) ?? 0;
+      return vol * unit;
+    }
+    if (_selectedType == MaintenanceType.oilChange) {
+      final fixed = _fixedItems
+          .where((i) => i.isSelected)
+          .fold(0.0, (s, i) => s + i.priceWithTax);
+      final others = _otherItems.fold(
+        0.0,
+        (s, i) => s + i.priceWithTax,
+      );
+      return fixed + others;
+    }
+    return double.tryParse(_costController.text) ?? 0;
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Charger la maintenance à modifier
-    final maintenanceAsync = ref.watch(
-      maintenanceByIdStreamProvider(widget.maintenanceId),
-    );
-
-    return maintenanceAsync.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, _) => Scaffold(body: Center(child: Text('Erreur: $err'))),
-      data: (maintenance) {
-        if (maintenance == null) {
-          return Scaffold(
-            body: Center(child: Text('Intervention non trouvée')),
-          );
-        }
-
-        // Charger le véhicule associé (optionnel, pour afficher le nom)
-        if (_maintenance == null) {
-          _maintenance = maintenance;
-          _titleController = TextEditingController(text: maintenance.title);
-          _descriptionController = TextEditingController(
-            text: maintenance.description,
-          );
-          _garageNameController = TextEditingController(
-            text: maintenance.garageName,
-          );
-          _garageContactController = TextEditingController(
-            text: maintenance.garageContact,
-          );
-          _costController = TextEditingController(
-            text: maintenance.cost.toString(),
-          );
-          _mileageController = TextEditingController(
-            text: maintenance.mileage.toString(),
-          );
-        }
-
-        return _MaintenanceEditForm(
-          maintenance: maintenance,
-          titleController: _titleController,
-          descriptionController: _descriptionController,
-          garageNameController: _garageNameController,
-          garageContactController: _garageContactController,
-          costController: _costController,
-          mileageController: _mileageController,
-          onSaved: (updatedMaintenance) async {
-            await ref
-                .read(maintenanceServiceProvider)
-                .updateMaintenance(updatedMaintenance);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Modifié avec succès !')),
-              );
-              context.push('/vehicles'); // ou retour à la fiche véhicule
-            }
-          },
-        );
-      },
-    );
-  }
-}
-
-// Widget séparé pour le formulaire (facilite la gestion de l'état local)
-class _MaintenanceEditForm extends ConsumerWidget {
-  final Maintenance maintenance;
-  final TextEditingController titleController;
-  final TextEditingController descriptionController;
-  final TextEditingController garageNameController;
-  final TextEditingController garageContactController;
-  final TextEditingController costController;
-  final TextEditingController mileageController;
-  final void Function(Maintenance) onSaved;
-
-  const _MaintenanceEditForm({
-    required this.maintenance,
-    required this.titleController,
-    required this.descriptionController,
-    required this.garageNameController,
-    required this.garageContactController,
-    required this.costController,
-    required this.mileageController,
-    required this.onSaved,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref
-        .watch<AsyncValue<AppUser?>>(authStateNotifierProvider)
-        .asData
-        ?.value;
-    if (user == null) return const SizedBox();
-
-    DateTime currentDate = maintenance.date;
-    MaintenanceType currentType = maintenance.type;
-    MaintenanceStatus currentStatus = maintenance.status;
+    final currency = ref.watch(currencyProvider);
+    final totalCost = _calculateTotalCost();
+    final user = ref.watch(authStateNotifierProvider).asData?.value;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Modifier l\'intervention')),
+      appBar: AppBar(
+        title: Text('Modifier : ${widget.vehicleName}'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Chip(label: Text(formatCurrency(totalCost, currency))),
+            ),
+          ),
+        ],
+      ),
       body: Form(
+        key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Type (non modifiable si déjà terminée ? optionnel)
             DropdownButtonFormField<MaintenanceType>(
-              initialValue: currentType,
-              decoration: const InputDecoration(labelText: 'Type *'),
-              items: MaintenanceType.values.map((type) {
-                return DropdownMenuItem(
-                  value: type,
-                  child: Text(_getMaintenanceTypeLabel(type)),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  // Recalculer les échéances si besoin
-                  // (vous pouvez ajouter cette logique si nécessaire)
-                }
-              },
+              initialValue: _selectedType,
+              decoration: const InputDecoration(
+                labelText: "Type d'intervention",
+                border: OutlineInputBorder(),
+              ),
+              items: MaintenanceType.values
+                  .map(
+                    (t) =>
+                        DropdownMenuItem(value: t, child: Text(_getLabel(t))),
+                  )
+                  .toList(),
+              onChanged: (val) => setState(() => _selectedType = val!),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+
+            if (_selectedType == MaintenanceType.fuel) ..._buildFuelSection(),
+            if (_selectedType == MaintenanceType.oilChange)
+              ..._buildOilChangeSection(),
 
             TextFormField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: 'Titre *'),
-              validator: (v) => v!.trim().isEmpty ? 'Champ requis' : null,
+              controller: _titleController,
+              decoration: const InputDecoration(
+                labelText: 'Titre *',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
             ),
             const SizedBox(height: 16),
-
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _mileageController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Kilométrage actuel',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) =>
+                        _selectedMileage = double.tryParse(v) ?? 0,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ListTile(
+                    title: const Text('Date'),
+                    subtitle: Text(
+                      DateFormat('dd/MM/yyyy').format(_selectedDate),
+                    ),
+                    onTap: () async {
+                      final d = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (d != null) setState(() => _selectedDate = d);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             TextFormField(
-              controller: descriptionController,
-              decoration: const InputDecoration(labelText: 'Description'),
-              maxLines: 3,
+              controller: _descriptionController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Description / Notes',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 16),
-
-            // Date
-            ListTile(
-              title: const Text('Date *'),
-              subtitle: Text('Le ${currentDate.toLocal()}'),
-              trailing: const Icon(Icons.calendar_today),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _garageNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nom du Garage',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.store),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _garageContactController,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact Garage',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.phone),
+                    ),
+                  ),
+                ),
+              ],
             ),
-
-            // Kilométrage
-            TextFormField(
-              controller: mileageController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Kilométrage *'),
-              validator: (v) => v!.trim().isEmpty || double.tryParse(v) == null
-                  ? 'Kilométrage invalide'
-                  : null,
+            const SizedBox(height: 24),
+            const Text(
+              'Prochaine Échéance (Rappel)',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const Divider(),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _nextDueMileage?.toStringAsFixed(0),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Prochain Km',
+                      border: OutlineInputBorder(),
+                      suffixText: 'km',
+                    ),
+                    onChanged: (v) => _nextDueMileage = double.tryParse(v),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ListTile(
+                    title: const Text('Date prévue'),
+                    subtitle: Text(
+                      _nextDueDate == null
+                          ? 'Non définie'
+                          : DateFormat('dd/MM/yyyy').format(_nextDueDate!),
+                    ),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final d = await showDatePicker(
+                        context: context,
+                        initialDate: _nextDueDate ?? DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime(2100),
+                      );
+                      if (d != null) setState(() => _nextDueDate = d);
+                    },
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
-
-            // Garage
-            TextFormField(
-              controller: garageNameController,
-              decoration: const InputDecoration(labelText: 'Nom du garage'),
-            ),
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: garageContactController,
-              decoration: const InputDecoration(labelText: 'Contact'),
-            ),
-            const SizedBox(height: 16),
-
-            // Coût
-            TextFormField(
-              controller: costController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Coût total (€) *'),
-              validator: (v) => v!.trim().isEmpty || double.tryParse(v) == null
-                  ? 'Coût invalide'
-                  : null,
-            ),
-            const SizedBox(height: 16),
-
-            // Statut (optionnel)
-            DropdownButtonFormField<MaintenanceStatus>(
-              initialValue: currentStatus,
-              decoration: const InputDecoration(labelText: 'Statut *'),
-              items: MaintenanceStatus.values.map((status) {
-                return DropdownMenuItem(
-                  value: status,
-                  child: Text(_getMaintenanceStatusLabel(status)),
-                );
-              }).toList(),
-              onChanged:
-                  null, // Désactivé pour l'instant — vous pouvez l'activer si besoin
-            ),
+            if (_selectedType != MaintenanceType.fuel &&
+                _selectedType != MaintenanceType.oilChange)
+              TextFormField(
+                controller: _costController,
+                decoration: const InputDecoration(
+                  labelText: 'Coût Total',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+              ),
+            const SizedBox(height: 90),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          if (titleController.text.trim().isEmpty ||
-              mileageController.text.trim().isEmpty ||
-              costController.text.trim().isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Veuillez remplir tous les champs obligatoires.'),
+      floatingActionButton: FloatingActionButton.extended(
+        label: const Text('Mettre à jour'),
+        icon: const Icon(Icons.update),
+        onPressed: () async {
+          if (!_formKey.currentState!.validate() || user == null) return;
+
+          final confirmed = await confirmWithPassword(
+            context,
+            title: 'Enregistrer les modifications ?',
+            message:
+                'Confirmez la mise à jour de cette intervention.\n'
+                'Entrez votre mot de passe pour continuer.',
+            confirmLabel: 'Enregistrer',
+          );
+          if (confirmed != true || !context.mounted) return;
+
+          final List<MaintenanceItem> allItems;
+          if (_selectedType == MaintenanceType.fuel) {
+            allItems = [
+              MaintenanceItem(
+                name: 'Plein Carburant',
+                category: 'fuel',
+                quantity: double.tryParse(_fuelVolumeController.text) ?? 0,
+                price: double.tryParse(_fuelUnitPriceController.text) ?? 0,
+                isSelected: true,
               ),
-            );
-            return;
+            ];
+          } else if (_selectedType == MaintenanceType.oilChange) {
+            allItems = [
+              ..._fixedItems.where((i) => i.isSelected),
+              ..._otherItems.where((i) => i.name.isNotEmpty),
+            ];
+          } else {
+            allItems = [];
           }
 
-          final updatedMaintenance = maintenance.copyWith(
-            title: titleController.text.trim(),
-            description: descriptionController.text.trim().isNotEmpty
-                ? descriptionController.text.trim()
-                : null,
-            garageName: garageNameController.text.trim().isNotEmpty
-                ? garageNameController.text.trim()
-                : null,
-            garageContact: garageContactController.text.trim().isNotEmpty
-                ? garageContactController.text.trim()
-                : null,
-            mileage: double.parse(mileageController.text.trim()),
-            cost: double.parse(costController.text.trim()),
+          final updatedMaintenance = widget.maintenance.copyWith(
+            type: _selectedType,
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim(),
+            date: _selectedDate,
+            mileage: _selectedMileage,
+            garageName: _garageNameController.text.trim(),
+            garageContact: _garageContactController.text.trim(),
+            cost: totalCost,
+            items: allItems,
+            nextDueMileage: _nextDueMileage,
+            nextDueDate: _nextDueDate,
             updatedAt: DateTime.now(),
           );
 
-          onSaved(updatedMaintenance);
+          try {
+            await ref
+                .read(maintenanceServiceProvider)
+                .updateMaintenance(updatedMaintenance);
+
+            if (!context.mounted) return;
+            Navigator.pop(context);
+          } catch (e) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Erreur : $e')));
+          }
         },
-        child: const Icon(Icons.check),
       ),
     );
   }
 
-  String _getMaintenanceTypeLabel(MaintenanceType type) {
-    switch (type) {
+  // --- SECTIONS UI REUTILISEES ---
+  List<Widget> _buildFuelSection() {
+    return [
+      Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: _fuelUnitPriceController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Prix/L',
+                border: OutlineInputBorder(),
+                suffixText: 'DT',
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextFormField(
+              controller: _fuelVolumeController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Volume (L)',
+                border: OutlineInputBorder(),
+                suffixText: 'L',
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 20),
+    ];
+  }
+
+  List<Widget> _buildOilChangeSection() {
+    return [
+      const Text('Articles', style: TextStyle(fontWeight: FontWeight.bold)),
+      ..._fixedItems.asMap().entries.map((entry) {
+        final i = entry.key;
+        final item = entry.value;
+        return Card(
+          child: CheckboxListTile(
+            title: Text(item.name),
+            value: item.isSelected,
+            onChanged: (v) =>
+                setState(() => _fixedItems[i] = item.copyWith(isSelected: v)),
+
+            subtitle: item.isSelected
+                ? Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: TextFormField(
+                              initialValue: item.price.toString(),
+                              decoration: const InputDecoration(
+                                labelText: 'Prix HT',
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (v) => setState(
+                                () => _fixedItems[i] = _fixedItems[i].copyWith(
+                                  price: double.tryParse(v) ?? 0,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 1,
+                            child: TextFormField(
+                              initialValue: item.quantity.toString(),
+                              decoration: const InputDecoration(
+                                labelText: 'Qté',
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (v) => setState(
+                                () => _fixedItems[i] = _fixedItems[i].copyWith(
+                                  quantity: double.tryParse(v) ?? 1.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 1,
+                            child: TextFormField(
+                              initialValue: item.taxRate.toString(),
+                              decoration: const InputDecoration(
+                                labelText: 'TVA %',
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (v) => setState(
+                                () => _fixedItems[i] = _fixedItems[i].copyWith(
+                                  taxRate: double.tryParse(v) ?? 19.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        initialValue: item.description,
+                        decoration: const InputDecoration(
+                          labelText: 'Marque / Référence',
+                          isDense: true,
+                        ),
+                        onChanged: (v) => setState(
+                          () => _fixedItems[i] = _fixedItems[i].copyWith(
+                            description: v,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : null,
+          ),
+        );
+      }),
+      ..._renderOtherItems(),
+      TextButton.icon(
+        onPressed: _addOtherItem,
+        icon: const Icon(Icons.add),
+        label: const Text('Ajouter autre'),
+      ),
+      const Divider(),
+    ];
+  }
+
+  void _addOtherItem() {
+    setState(() {
+      _otherItems.add(
+        const MaintenanceItem(
+          name: '',
+          category: 'other',
+          isSelected: true,
+          taxRate: 19.0,
+        ),
+      );
+      _otherNameControllers.add(TextEditingController());
+      _otherPriceControllers.add(TextEditingController());
+      _otherQtyControllers.add(TextEditingController(text: '1.0'));
+    });
+  }
+
+  List<Widget> _renderOtherItems() {
+    return _otherItems.asMap().entries.map((entry) {
+      final i = entry.key;
+      return Card(
+        color: Colors.grey.shade50,
+        child: ListTile(
+          title: TextFormField(
+            controller: _otherNameControllers[i],
+            decoration: const InputDecoration(labelText: 'Nom'),
+            onChanged: (v) => _otherItems[i] = _otherItems[i].copyWith(name: v),
+          ),
+          subtitle: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextFormField(
+                  controller: _otherPriceControllers[i],
+                  decoration: const InputDecoration(
+                    labelText: 'Prix HT',
+                    suffixText: 'DT',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (v) => setState(
+                    () => _otherItems[i] = _otherItems[i].copyWith(
+                      price: double.tryParse(v) ?? 0,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 1,
+                child: TextFormField(
+                  controller: _otherQtyControllers[i],
+                  decoration: const InputDecoration(labelText: 'Qté'),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (v) => setState(
+                    () => _otherItems[i] = _otherItems[i].copyWith(
+                      quantity: double.tryParse(v) ?? 1.0,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 1,
+                child: TextFormField(
+                  initialValue: _otherItems[i].taxRate.toString(),
+                  decoration: const InputDecoration(labelText: 'TVA %'),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (v) => setState(
+                    () => _otherItems[i] = _otherItems[i].copyWith(
+                      taxRate: double.tryParse(v) ?? 19.0,
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => setState(() {
+                  _otherItems.removeAt(i);
+                  _otherNameControllers.removeAt(i);
+                  _otherPriceControllers.removeAt(i);
+                  _otherQtyControllers.removeAt(i);
+                }),
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  String _getLabel(MaintenanceType t) {
+    switch (t) {
       case MaintenanceType.oilChange:
         return 'Vidange';
-      case MaintenanceType.brakes:
-        return 'Freins';
-      case MaintenanceType.tires:
-        return 'Pneus';
-      case MaintenanceType.battery:
-        return 'Batterie';
-      case MaintenanceType.timingBelt:
-        return 'Courroie';
+      case MaintenanceType.fuel:
+        return 'Carburant';
       case MaintenanceType.technicalInspection:
-        return 'Contrôle technique';
+        return 'Contrôle Technique';
       case MaintenanceType.repair:
         return 'Réparation';
-      case MaintenanceType.other:
+      default:
         return 'Autre';
     }
-  }
-
-  String _getMaintenanceStatusLabel(MaintenanceStatus status) {
-    switch (status) {
-      case MaintenanceStatus.completed:
-        return 'Terminée';
-      case MaintenanceStatus.planned:
-        return 'Planifiée';
-      case MaintenanceStatus.canceled:
-        return 'Annulée';
-    }
-  }
-}
-
-// 🔹 Ajoutez une méthode copyWith à votre modèle Maintenance (si ce n'est pas déjà fait)
-extension MaintenanceCopyWith on Maintenance {
-  Maintenance copyWith({
-    String? id,
-    String? userId,
-    String? vehicleId,
-    MaintenanceType? type,
-    String? title,
-    String? description,
-    DateTime? date,
-    double? mileage,
-    String? garageName,
-    String? garageContact,
-    double? cost,
-    String? receiptImageUrl,
-    double? nextDueMileage,
-    DateTime? nextDueDate,
-    MaintenanceStatus? status,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return Maintenance(
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
-      vehicleId: vehicleId ?? this.vehicleId,
-      type: type ?? this.type,
-      title: title ?? this.title,
-      description: description ?? this.description,
-      date: date ?? this.date,
-      mileage: mileage ?? this.mileage,
-      garageName: garageName ?? this.garageName,
-      garageContact: garageContact ?? this.garageContact,
-      cost: cost ?? this.cost,
-      receiptImageUrl: receiptImageUrl ?? this.receiptImageUrl,
-      nextDueMileage: nextDueMileage ?? this.nextDueMileage,
-      nextDueDate: nextDueDate ?? this.nextDueDate,
-      status: status ?? this.status,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      items: items,
-    );
   }
 }

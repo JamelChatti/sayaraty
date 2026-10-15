@@ -81,17 +81,17 @@ class MaintenanceDetailScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  if (live.type == MaintenanceType.fuel) ...[
+                  if (live.fuelLiters > 0) ...[
                     const SizedBox(height: 12),
                     Chip(
                       avatar: Icon(
-                        live.isFullTank
+                        live.effectiveFullTank
                             ? Icons.check_circle
                             : Icons.water_drop_outlined,
                         size: 18,
                       ),
                       label: Text(
-                        live.isFullTank
+                        live.effectiveFullTank
                             ? 'Plein complet — ${live.fuelLiters.toStringAsFixed(1)} L'
                             : 'Plein partiel — ${live.fuelLiters.toStringAsFixed(1)} L',
                       ),
@@ -105,10 +105,29 @@ class MaintenanceDetailScreen extends ConsumerWidget {
           const SizedBox(height: 16),
 
           if (live.items.isNotEmpty) ...[
-            _sectionTitle(theme, 'Articles et pièces'),
+            _sectionTitle(theme, 'Éléments d’intervention'),
             const SizedBox(height: 8),
             ...live.items.map((item) {
               final priceTTC = item.priceWithTax;
+              final brand = item.brand?.trim();
+              final note = item.description.trim();
+              final reminderParts = <String>[];
+              if (item.nextDueMileage != null) {
+                reminderParts.add(
+                  'Prochain km : ${item.nextDueMileage!.toStringAsFixed(0)}',
+                );
+              }
+              if (item.nextDueDate != null) {
+                reminderParts.add(
+                  'Date : ${DateFormat('dd/MM/yyyy').format(item.nextDueDate!)}',
+                );
+              }
+              final lines = <String>[
+                '${item.quantity} x ${formatCurrency(item.price, currency)} HT (TVA ${item.taxRate}%)',
+                if (brand != null && brand.isNotEmpty) 'Marque : $brand',
+                if (note.isNotEmpty) 'Note : $note',
+                if (reminderParts.isNotEmpty) reminderParts.join(' · '),
+              ];
 
               return Card(
                 elevation: 0,
@@ -118,12 +137,7 @@ class MaintenanceDetailScreen extends ConsumerWidget {
                 ),
                 child: ListTile(
                   title: Text(item.name),
-                  subtitle: Text(
-                    item.description.isEmpty
-                        ? '${item.quantity} x ${formatCurrency(item.price, currency)} HT (TVA ${item.taxRate}%)'
-                        : '${item.quantity} x ${formatCurrency(item.price, currency)} HT (TVA ${item.taxRate}%)\n'
-                              'Note: ${item.description}',
-                  ),
+                  subtitle: Text(lines.join('\n')),
                   trailing: Text(
                     formatCurrency(priceTTC, currency),
                     style: const TextStyle(
@@ -131,7 +145,7 @@ class MaintenanceDetailScreen extends ConsumerWidget {
                       color: Colors.green,
                     ),
                   ),
-                  isThreeLine: item.description.isNotEmpty,
+                  isThreeLine: lines.length > 1,
                 ),
               );
             }),

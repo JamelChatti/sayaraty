@@ -132,7 +132,11 @@ class MaintenanceService {
           data['id'] = doc.id;
           return Maintenance.fromMap(data);
         })
-        .where((m) => m.nextDueDate != null)
+        .where(
+          (m) =>
+              m.nextDueDate != null ||
+              m.items.any((i) => i.nextDueDate != null),
+        )
         .toList();
   }
 

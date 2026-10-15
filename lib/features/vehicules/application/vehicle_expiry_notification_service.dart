@@ -134,11 +134,17 @@ class VehicleExpiryNotificationService {
               '${v.routine.toMap()}',
         ),
         ...duesByVehicle.entries.expand(
-          (e) => e.value.map(
-            (m) =>
-                '${m.id}|${m.nextDueDate?.millisecondsSinceEpoch}|'
-                '${m.nextDueMileage}',
-          ),
+          (e) => e.value.map((m) {
+            final itemDues = m.items
+                .where((i) => i.nextDueDate != null)
+                .map(
+                  (i) =>
+                      '${i.name}:${i.nextDueDate?.millisecondsSinceEpoch}',
+                )
+                .join(',');
+            return '${m.id}|${m.nextDueDate?.millisecondsSinceEpoch}|'
+                '${m.nextDueMileage}|$itemDues';
+          }),
         ),
       ].join(';');
 
@@ -206,23 +212,41 @@ class VehicleExpiryNotificationService {
     final vehicleLabel = _vehicleLabel(vehicle);
 
     for (final m in maintenances) {
-      final due = m.nextDueDate;
-      if (due == null) continue;
+      // Rappels par élément (nouveau formulaire).
+      var scheduledItemReminder = false;
+      for (final item in m.items) {
+        final due = item.nextDueDate;
+        if (due == null) continue;
+        scheduledItemReminder = true;
+        ids.addAll(
+          await _scheduleDateBasedReminder(
+            vehicle: vehicle,
+            idSeed: 'maint_${m.id}_${item.category}_${item.name}',
+            title: 'Prochain entretien',
+            expiry: due,
+            vehicleLabel: vehicleLabel,
+            kindLabel: item.name.trim().isNotEmpty ? item.name : 'Entretien',
+            upcomingWording: true,
+          ),
+        );
+      }
 
-      final kindLabel =
-          m.title.trim().isNotEmpty ? m.title.trim() : 'Entretien';
-
-      ids.addAll(
-        await _scheduleDateBasedReminder(
-          vehicle: vehicle,
-          idSeed: 'maint_${m.id}',
-          title: 'Prochain entretien',
-          expiry: due,
-          vehicleLabel: vehicleLabel,
-          kindLabel: kindLabel,
-          upcomingWording: true,
-        ),
-      );
+      // Compatibilité : anciennes interventions avec échéance globale seulement.
+      if (!scheduledItemReminder && m.nextDueDate != null) {
+        final kindLabel =
+            m.title.trim().isNotEmpty ? m.title.trim() : 'Entretien';
+        ids.addAll(
+          await _scheduleDateBasedReminder(
+            vehicle: vehicle,
+            idSeed: 'maint_${m.id}',
+            title: 'Prochain entretien',
+            expiry: m.nextDueDate!,
+            vehicleLabel: vehicleLabel,
+            kindLabel: kindLabel,
+            upcomingWording: true,
+          ),
+        );
+      }
     }
     return ids;
   }

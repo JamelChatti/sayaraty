@@ -80,9 +80,7 @@ class FuelConsumptionCalculator {
   const FuelConsumptionCalculator._();
 
   static FuelStats fromMaintenances(List<Maintenance> maintenances) {
-    final fills = maintenances
-        .where((m) => m.type == MaintenanceType.fuel && m.fuelLiters > 0)
-        .toList()
+    final fills = maintenances.where((m) => m.fuelLiters > 0).toList()
       ..sort((a, b) {
         final byKm = a.mileage.compareTo(b.mileage);
         if (byKm != 0) return byKm;
@@ -92,28 +90,39 @@ class FuelConsumptionCalculator {
     if (fills.isEmpty) return FuelStats.empty;
 
     final totalLiters = fills.fold<double>(0, (s, f) => s + f.fuelLiters);
-    final totalCost = fills.fold<double>(0, (s, f) => s + f.cost);
-    final fullCount = fills.where((f) => f.isFullTank).length;
+    final totalCost = fills.fold<double>(0, (s, f) {
+      final fuelCost = f.items
+          .where((i) => i.category == 'fuel' || f.type == MaintenanceType.fuel)
+          .fold<double>(0, (s2, i) => s2 + i.priceWithTax);
+      return s + (fuelCost > 0 ? fuelCost : f.cost);
+    });
+    final fullCount = fills.where((f) => f.effectiveFullTank).length;
 
     final segments = <FuelSegment>[];
     Maintenance? lastFull;
 
     for (final fill in fills) {
-      if (lastFull != null && fill.isFullTank) {
+      if (lastFull != null && fill.effectiveFullTank) {
         final distance = fill.mileage - lastFull.mileage;
         if (distance > 0) {
+          final fuelCost = fill.items
+              .where(
+                (i) =>
+                    i.category == 'fuel' || fill.type == MaintenanceType.fuel,
+              )
+              .fold<double>(0, (s, i) => s + i.priceWithTax);
           segments.add(
             FuelSegment(
               fromFill: lastFull,
               toFill: fill,
               distanceKm: distance,
               liters: fill.fuelLiters,
-              cost: fill.cost,
+              cost: fuelCost > 0 ? fuelCost : fill.cost,
             ),
           );
         }
       }
-      if (fill.isFullTank) {
+      if (fill.effectiveFullTank) {
         lastFull = fill;
       }
     }

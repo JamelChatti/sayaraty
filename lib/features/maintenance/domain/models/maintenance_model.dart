@@ -288,10 +288,24 @@ class Maintenance extends Equatable {
     );
   }
 
-  /// Litres saisis sur un plein carburant.
+  /// Litres saisis sur un plein carburant (type fuel ou ligne catégorie fuel).
   double get fuelLiters {
-    if (type != MaintenanceType.fuel) return 0;
-    return items.fold<double>(0, (sum, i) => sum + i.quantity);
+    final fuelItems = items.where(
+      (i) => i.category == 'fuel' || type == MaintenanceType.fuel,
+    );
+    if (fuelItems.isEmpty && type == MaintenanceType.fuel) {
+      return items.fold<double>(0, (sum, i) => sum + i.quantity);
+    }
+    return fuelItems.fold<double>(0, (sum, i) => sum + i.quantity);
+  }
+
+  /// Plein complet si au moins une ligne carburant l’indique, sinon champ legacy.
+  bool get effectiveFullTank {
+    final fuelItems = items.where((i) => i.category == 'fuel').toList();
+    if (fuelItems.isNotEmpty) {
+      return fuelItems.any((i) => i.isFullTank);
+    }
+    return isFullTank;
   }
 
   /// Prochaine échéance encore à venir (date future).

@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/security/password_confirm_dialog.dart';
+import '../../application/vehicle_expiry_notification_service.dart';
 import '../../application/vehicle_service.dart';
-
 import '../../domain/models/vehicule_model.dart';
 import '../widgets/vehicle_form.dart';
 
@@ -55,6 +55,7 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
   late final TextEditingController _mileageController;
   late final TextEditingController _vinController;
 
+  DateTime? _dpmc;
   DateTime? _insuranceExpiry;
   DateTime? _inspectionExpiry;
   DateTime? _taxExpiry;
@@ -71,6 +72,7 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
       text: v.mileage?.toStringAsFixed(0) ?? '',
     );
     _vinController = TextEditingController(text: v.vin ?? '');
+    _dpmc = v.dpmc;
     _insuranceExpiry = v.insuranceExpiry;
     _inspectionExpiry = v.technicalInspectionExpiry;
     _taxExpiry = v.taxExpiry;
@@ -141,14 +143,15 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
         yearController: _yearController,
         mileageController: _mileageController,
         vinController: _vinController,
+        dpmc: _dpmc,
         insuranceExpiry: _insuranceExpiry,
         inspectionExpiry: _inspectionExpiry,
         taxExpiry: _taxExpiry,
+        onDpmcChanged: (d) => setState(() => _dpmc = d),
         onInsuranceExpiryChanged: (d) => setState(() => _insuranceExpiry = d),
         onInspectionExpiryChanged: (d) =>
             setState(() => _inspectionExpiry = d),
         onTaxExpiryChanged: (d) => setState(() => _taxExpiry = d),
-
       ),
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.check),
@@ -185,6 +188,7 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
               vin: _vinController.text.trim().isEmpty
                   ? null
                   : _vinController.text.trim(),
+              dpmc: _dpmc,
               insuranceExpiry: _insuranceExpiry,
               technicalInspectionExpiry: _inspectionExpiry,
               taxExpiry: _taxExpiry,
@@ -194,13 +198,29 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
             await ref
                 .read(vehicleServiceProvider)
                 .updateVehicle(updatedVehicle);
+
+            // Reprogramme les rappels : annule les anciennes notifs liées
+            // à l’ancienne date, puis planifie J−7 → J pour la nouvelle.
+            final vehicles = ref
+                .read(vehiclesStreamProvider(updatedVehicle.userId))
+                .asData
+                ?.value;
+            final toSync = vehicles == null
+                ? <Vehicle>[updatedVehicle]
+                : [
+                    for (final v in vehicles)
+                      if (v.id == updatedVehicle.id) updatedVehicle else v,
+                  ];
+            await ref
+                .read(vehicleExpiryNotificationServiceProvider)
+                .syncVehicles(toSync, force: true);
+
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Véhicule mis à jour avec succès'),
                 ),
               );
-              // Retour à l'écran précédent
               context.pop();
             }
           } catch (e) {

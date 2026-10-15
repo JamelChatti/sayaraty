@@ -1,13 +1,15 @@
 import 'package:intl/intl.dart';
 import '../../features/settings/domain/app_settings.dart';
+import 'currency_utils.dart';
 
+/// Affiche un montant stocké (unité majeure) — pour le TND toujours en dinars
+/// avec 3 décimales (millimes visibles via les décimales).
 String formatCurrency(double amount, CurrencyEnum currency) {
-  // Le TND (Dinar Tunisien) utilise 3 décimales
   final int digits = (currency == CurrencyEnum.tnd) ? 3 : 2;
 
   final formatter = NumberFormat.currency(
     locale: _getLocale(currency),
-    symbol: _getSymbol(currency),
+    symbol: currencySymbol(currency),
     decimalDigits: digits,
   );
 
@@ -19,25 +21,12 @@ String _getLocale(CurrencyEnum currency) {
     case CurrencyEnum.dzd:
     case CurrencyEnum.tnd:
     case CurrencyEnum.mad:
-      return 'fr_TN'; // Utiliser fr_TN aide pour le formatage régional
+      return 'fr_TN';
     case CurrencyEnum.eur:
       return 'fr_FR';
     case CurrencyEnum.usd:
       return 'en_US';
     default:
       return 'fr';
-  }
-}
-
-String _getSymbol(CurrencyEnum currency) {
-  switch (currency) {
-    case CurrencyEnum.dzd: return 'DA';
-    case CurrencyEnum.tnd: return 'DT'; // "DT" est souvent plus commun que "TND" en Tunisie
-    case CurrencyEnum.eur: return '€';
-    case CurrencyEnum.usd: return '\$';
-    case CurrencyEnum.gbp: return '£';
-    case CurrencyEnum.mad: return 'MAD';
-    case CurrencyEnum.sar: return 'SAR';
-    case CurrencyEnum.qar: return 'QAR';
   }
 }

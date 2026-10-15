@@ -19,6 +19,14 @@ final maintenancesStreamProvider = StreamProvider.autoDispose
           .watchMaintenances(args.vehicleId, args.userId);
     });
 
+/// Toutes les interventions d'un véhicule (tous auteurs) — utile pour la conso.
+final vehicleMaintenancesStreamProvider = StreamProvider.autoDispose
+    .family<List<Maintenance>, String>((ref, vehicleId) {
+      return ref
+          .watch(maintenanceServiceProvider)
+          .watchMaintenancesByVehicle(vehicleId);
+    });
+
 // ✅ NOUVEAU: Provider pour les professionnels
 // Dans maintenance_service.dart
 // ✅ CORRIGÉ : Utiliser un record nommé au lieu d'un Map
@@ -79,6 +87,53 @@ class MaintenanceService {
       'nextDueMileage': FieldValue.delete(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// Met à jour uniquement la liste des pièces jointes.
+  Future<void> updateMaintenanceAttachments(
+    String maintenanceId,
+    List<String> attachments,
+  ) async {
+    await _firestore.collection('maintenances').doc(maintenanceId).update({
+      'attachments': attachments,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Toutes les maintenances d'un véhicule, sans filtre userId.
+  Stream<List<Maintenance>> watchMaintenancesByVehicle(String vehicleId) {
+    return _firestore
+        .collection('maintenances')
+        .where('vehicleId', isEqualTo: vehicleId)
+        .snapshots()
+        .map((snapshot) {
+          final list = snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return Maintenance.fromMap(data);
+          }).toList();
+          list.sort((a, b) => b.date.compareTo(a.date));
+          return list;
+        });
+  }
+
+  /// Entretiens ayant une date de prochain rappel (`nextDueDate`).
+  Future<List<Maintenance>> fetchMaintenancesWithNextDue(
+    String vehicleId,
+  ) async {
+    final snapshot = await _firestore
+        .collection('maintenances')
+        .where('vehicleId', isEqualTo: vehicleId)
+        .get();
+
+    return snapshot.docs
+        .map((doc) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          return Maintenance.fromMap(data);
+        })
+        .where((m) => m.nextDueDate != null)
+        .toList();
   }
 
   // ✅ Lire les maintenances d'un véhicule (triées par date DESC)

@@ -11,15 +11,39 @@ final attachmentServiceProvider = Provider<AttachmentService>((ref) {
 class AttachmentService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  /// Upload un fichier et retourne son URL
-  Future<String> uploadAttachment(String vehicleId, File file) async {
+  /// Upload un fichier sous `vehicles/{vehicleId}/...` et retourne son URL.
+  Future<String> uploadAttachment(String vehicleId, File file) {
+    return uploadFile(
+      storageFolder: 'vehicles',
+      parentId: vehicleId,
+      file: file,
+    );
+  }
+
+  /// Upload un fichier sous `maintenances/{maintenanceId}/...` et retourne son URL.
+  Future<String> uploadMaintenanceAttachment(
+    String maintenanceId,
+    File file,
+  ) {
+    return uploadFile(
+      storageFolder: 'maintenances',
+      parentId: maintenanceId,
+      file: file,
+    );
+  }
+
+  Future<String> uploadFile({
+    required String storageFolder,
+    required String parentId,
+    required File file,
+  }) async {
     final fileName =
         '${DateTime.now().millisecondsSinceEpoch}_${p.basename(file.path)}';
 
     final ref = _storage
         .ref()
-        .child('vehicles')
-        .child(vehicleId)
+        .child(storageFolder)
+        .child(parentId)
         .child(fileName);
 
     final task = await ref.putFile(file);

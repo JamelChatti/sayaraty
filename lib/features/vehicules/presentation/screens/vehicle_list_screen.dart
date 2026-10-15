@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../auth/domain/models/user_model.dart';
 import '../../../../core/security/password_confirm_dialog.dart';
+import '../../application/vehicle_expiry_notification_service.dart';
 import '../../application/vehicle_providers.dart';
 import '../../application/vehicle_service.dart' hide vehiclesStreamProvider;
 import 'full_screen_image.dart';
@@ -38,16 +39,33 @@ class VehicleListScreen extends ConsumerWidget {
   }
 }
 
-class _VehicleListBody extends ConsumerWidget {
+class _VehicleListBody extends ConsumerStatefulWidget {
   final String userId;
 
   const _VehicleListBody({required this.userId});
 
-  Future<void> _showDeleteDialog(
-    BuildContext context,
-    WidgetRef ref,
-    String vehicleId,
-  ) async {
+  @override
+  ConsumerState<_VehicleListBody> createState() => _VehicleListBodyState();
+}
+
+class _VehicleListBodyState extends ConsumerState<_VehicleListBody> {
+  @override
+  void initState() {
+    super.initState();
+    ref.listenManual(
+      vehiclesStreamProvider(widget.userId),
+      (previous, next) {
+        final vehicles = next.asData?.value;
+        if (vehicles == null) return;
+        ref
+            .read(vehicleExpiryNotificationServiceProvider)
+            .syncVehicles(vehicles, force: previous != null);
+      },
+      fireImmediately: true,
+    );
+  }
+
+  Future<void> _showDeleteDialog(String vehicleId) async {
     final confirm = await confirmWithPassword(
       context,
       title: 'Supprimer ce véhicule ?',
@@ -60,7 +78,7 @@ class _VehicleListBody extends ConsumerWidget {
 
     if (confirm == true) {
       await ref.read(vehicleServiceProvider).deleteVehicle(vehicleId);
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Véhicule supprimé')));
@@ -69,8 +87,8 @@ class _VehicleListBody extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final vehiclesAsync = ref.watch(vehiclesStreamProvider(userId));
+  Widget build(BuildContext context) {
+    final vehiclesAsync = ref.watch(vehiclesStreamProvider(widget.userId));
 
     return vehiclesAsync.when(
       loading: () =>
@@ -236,7 +254,7 @@ class _VehicleListBody extends ConsumerWidget {
                               if (value == 'edit') {
                                 context.push('/vehicles/edit/${vehicle.id}');
                               } else if (value == 'delete') {
-                                _showDeleteDialog(context, ref, vehicle.id);
+                                _showDeleteDialog(vehicle.id);
                               } else if (value == 'details') {
                                 context.push(
                                   '/vehicles/detail/${vehicle.id}',

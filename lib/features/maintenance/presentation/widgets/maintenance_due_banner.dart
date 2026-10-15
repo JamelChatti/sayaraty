@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../../../app/app_theme.dart';
 import '../../../../core/security/password_confirm_dialog.dart';
+import '../../../vehicules/application/vehicle_expiry_notification_service.dart';
+import '../../../vehicules/application/vehicle_service.dart';
 import '../../application/maintenance_service.dart';
 import '../../domain/models/maintenance_model.dart';
 
@@ -56,6 +58,14 @@ class MaintenanceDueBanner extends ConsumerWidget {
       final service = ref.read(maintenanceServiceProvider);
       for (final maintenance in dueMaintenances) {
         await service.clearDueReminder(maintenance.id);
+      }
+      final userId = dueMaintenances.first.userId;
+      final vehicles =
+          ref.read(vehiclesStreamProvider(userId)).asData?.value;
+      if (vehicles != null) {
+        await ref
+            .read(vehicleExpiryNotificationServiceProvider)
+            .syncVehicles(vehicles, force: true);
       }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

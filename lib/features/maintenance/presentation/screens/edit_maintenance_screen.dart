@@ -3,10 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/utils/currency_formatter.dart';
+import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/security/password_confirm_dialog.dart';
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../settings/application/currency_provider.dart';
+import '../../../settings/domain/app_settings.dart';
+import '../../../vehicules/application/vehicle_expiry_notification_service.dart';
+import '../../../vehicules/application/vehicle_service.dart';
 import '../../application/maintenance_service.dart';
+import '../../domain/estimate_next_due_date.dart';
+import '../../domain/maintenance_type_ui.dart';
 import '../../domain/models/maintenance_item.dart';
 import '../../domain/models/maintenance_model.dart';
 
@@ -37,6 +43,7 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
   late final TextEditingController _mileageController;
   late final TextEditingController _fuelVolumeController;
   late final TextEditingController _fuelUnitPriceController;
+  late final TextEditingController _nextDueMileageController;
 
   // État
   late DateTime _selectedDate;
@@ -44,6 +51,8 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
   late MaintenanceType _selectedType;
   DateTime? _nextDueDate;
   double? _nextDueMileage;
+  bool _nextDueDateFromEstimate = false;
+  bool _isFullTank = true;
 
   // Listes pour les items
   List<MaintenanceItem> _fixedItems = [];
@@ -61,7 +70,10 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
     _descriptionController = TextEditingController(text: m.description);
     _garageNameController = TextEditingController(text: m.garageName);
     _garageContactController = TextEditingController(text: m.garageContact);
-    _costController = TextEditingController(text: m.cost.toString());
+    final currency = ref.read(currencyProvider);
+    _costController = TextEditingController(
+      text: formatMoneyForInput(m.cost, currency),
+    );
     _mileageController = TextEditingController(
       text: m.mileage.toStringAsFixed(0),
     );
@@ -71,19 +83,24 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
     _selectedType = m.type;
     _nextDueDate = m.nextDueDate;
     _nextDueMileage = m.nextDueMileage;
+    _isFullTank = m.isFullTank;
+    _nextDueMileageController = TextEditingController(
+      text: m.nextDueMileage?.toStringAsFixed(0) ?? '',
+    );
 
     _fuelVolumeController = TextEditingController();
     _fuelUnitPriceController = TextEditingController();
 
     if (_selectedType == MaintenanceType.fuel && m.items.isNotEmpty) {
       _fuelVolumeController.text = m.items.first.quantity.toString();
-      _fuelUnitPriceController.text = m.items.first.price.toString();
+      _fuelUnitPriceController.text =
+          formatMoneyForInput(m.items.first.price, currency);
     }
 
-    _initItems(m.items);
+    _initItems(m.items, currency);
   }
 
-  void _initItems(List<MaintenanceItem> items) {
+  void _initItems(List<MaintenanceItem> items, CurrencyEnum currency) {
     final fixedNames = [
       'Filtre à huile',
       'Filtre à air',
@@ -105,7 +122,9 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
       _otherItems.add(item);
       _otherNameControllers.add(TextEditingController(text: item.name));
       _otherPriceControllers.add(
-        TextEditingController(text: item.price.toString()),
+        TextEditingController(
+          text: formatMoneyForInput(item.price, currency),
+        ),
       );
       _otherQtyControllers.add(
         TextEditingController(text: item.quantity.toString()),
@@ -123,6 +142,7 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
     _mileageController.dispose();
     _fuelVolumeController.dispose();
     _fuelUnitPriceController.dispose();
+    _nextDueMileageController.dispose();
     for (var c in _otherNameControllers) {
       c.dispose();
     }
@@ -136,9 +156,10 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
   }
 
   double _calculateTotalCost() {
+    final currency = ref.read(currencyProvider);
     if (_selectedType == MaintenanceType.fuel) {
       final vol = double.tryParse(_fuelVolumeController.text) ?? 0;
-      final unit = double.tryParse(_fuelUnitPriceController.text) ?? 0;
+      final unit = parseMoneyInput(_fuelUnitPriceController.text, currency);
       return vol * unit;
     }
     if (_selectedType == MaintenanceType.oilChange) {
@@ -151,7 +172,7 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
       );
       return fixed + others;
     }
-    return double.tryParse(_costController.text) ?? 0;
+    return parseMoneyInput(_costController.text, currency);
   }
 
   @override
@@ -159,6 +180,8 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
     final currency = ref.watch(currencyProvider);
     final totalCost = _calculateTotalCost();
     final user = ref.watch(authStateNotifierProvider).asData?.value;
+    // Garde le stream véhicule actif pour accéder à la DPMC
+    ref.watch(vehicleByIdStreamProvider(widget.maintenance.vehicleId));
 
     return Scaffold(
       appBar: AppBar(
@@ -185,8 +208,16 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
               ),
               items: MaintenanceType.values
                   .map(
-                    (t) =>
-                        DropdownMenuItem(value: t, child: Text(_getLabel(t))),
+                    (t) => DropdownMenuItem(
+                      value: t,
+                      child: Row(
+                        children: [
+                          Icon(MaintenanceTypeUi.icon(t), size: 20),
+                          const SizedBox(width: 10),
+                          Text(MaintenanceTypeUi.label(t)),
+                        ],
+                      ),
+                    ),
                   )
                   .toList(),
               onChanged: (val) => setState(() => _selectedType = val!),
@@ -216,8 +247,12 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
                       labelText: 'Kilométrage actuel',
                       border: OutlineInputBorder(),
                     ),
-                    onChanged: (v) =>
-                        _selectedMileage = double.tryParse(v) ?? 0,
+                    onChanged: (v) {
+                      setState(() {
+                        _selectedMileage = double.tryParse(v) ?? 0;
+                        _refreshEstimatedDateIfNeeded();
+                      });
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -234,7 +269,12 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
                         firstDate: DateTime(2000),
                         lastDate: DateTime(2100),
                       );
-                      if (d != null) setState(() => _selectedDate = d);
+                      if (d != null) {
+                        setState(() {
+                          _selectedDate = d;
+                          _refreshEstimatedDateIfNeeded();
+                        });
+                      }
                     },
                   ),
                 ),
@@ -285,14 +325,17 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
               children: [
                 Expanded(
                   child: TextFormField(
-                    initialValue: _nextDueMileage?.toStringAsFixed(0),
+                    controller: _nextDueMileageController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Prochain Km',
                       border: OutlineInputBorder(),
                       suffixText: 'km',
                     ),
-                    onChanged: (v) => _nextDueMileage = double.tryParse(v),
+                    onChanged: (v) {
+                      setState(() => _nextDueMileage = double.tryParse(v));
+                      _estimateNextDueDateFromDpmc();
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -302,17 +345,23 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
                     subtitle: Text(
                       _nextDueDate == null
                           ? 'Non définie'
-                          : DateFormat('dd/MM/yyyy').format(_nextDueDate!),
+                          : '${DateFormat('dd/MM/yyyy').format(_nextDueDate!)}'
+                              '${_nextDueDateFromEstimate ? ' (estimée)' : ''}',
                     ),
                     trailing: const Icon(Icons.calendar_today),
                     onTap: () async {
                       final d = await showDatePicker(
                         context: context,
                         initialDate: _nextDueDate ?? DateTime.now(),
-                        firstDate: DateTime.now(),
+                        firstDate: DateTime(2000),
                         lastDate: DateTime(2100),
                       );
-                      if (d != null) setState(() => _nextDueDate = d);
+                      if (d != null) {
+                        setState(() {
+                          _nextDueDate = d;
+                          _nextDueDateFromEstimate = false;
+                        });
+                      }
                     },
                   ),
                 ),
@@ -323,9 +372,12 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
                 _selectedType != MaintenanceType.oilChange)
               TextFormField(
                 controller: _costController,
-                decoration: const InputDecoration(
-                  labelText: 'Coût Total',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: usesMillimeInput(currency)
+                      ? 'Coût Total (millimes)'
+                      : 'Coût Total',
+                  border: const OutlineInputBorder(),
+                  suffixText: currencyInputSuffix(currency),
                 ),
                 keyboardType: TextInputType.number,
                 onChanged: (_) => setState(() {}),
@@ -357,7 +409,10 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
                 name: 'Plein Carburant',
                 category: 'fuel',
                 quantity: double.tryParse(_fuelVolumeController.text) ?? 0,
-                price: double.tryParse(_fuelUnitPriceController.text) ?? 0,
+                price: parseMoneyInput(
+                  _fuelUnitPriceController.text,
+                  ref.read(currencyProvider),
+                ),
                 isSelected: true,
               ),
             ];
@@ -382,6 +437,8 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
             items: allItems,
             nextDueMileage: _nextDueMileage,
             nextDueDate: _nextDueDate,
+            isFullTank:
+                _selectedType == MaintenanceType.fuel ? _isFullTank : false,
             updatedAt: DateTime.now(),
           );
 
@@ -389,6 +446,18 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
             await ref
                 .read(maintenanceServiceProvider)
                 .updateMaintenance(updatedMaintenance);
+
+            final authUser =
+                ref.read(authStateNotifierProvider).asData?.value;
+            if (authUser != null) {
+              final vehicles =
+                  ref.read(vehiclesStreamProvider(authUser.uid)).asData?.value;
+              if (vehicles != null) {
+                await ref
+                    .read(vehicleExpiryNotificationServiceProvider)
+                    .syncVehicles(vehicles, force: true);
+              }
+            }
 
             if (!context.mounted) return;
             Navigator.pop(context);
@@ -405,6 +474,8 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
 
   // --- SECTIONS UI REUTILISEES ---
   List<Widget> _buildFuelSection() {
+    final currency = ref.watch(currencyProvider);
+    final symbol = currencyInputSuffix(currency);
     return [
       Row(
         children: [
@@ -412,10 +483,12 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
             child: TextFormField(
               controller: _fuelUnitPriceController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Prix/L',
-                border: OutlineInputBorder(),
-                suffixText: 'DT',
+              decoration: InputDecoration(
+                labelText: usesMillimeInput(currency)
+                    ? 'Prix/L (millimes)'
+                    : 'Prix/L',
+                border: const OutlineInputBorder(),
+                suffixText: symbol,
               ),
               onChanged: (_) => setState(() {}),
             ),
@@ -435,11 +508,23 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
           ),
         ],
       ),
-      const SizedBox(height: 20),
+      CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Plein complet'),
+        subtitle: const Text(
+          'Coché = calcul L/100 km possible (recommandé)',
+        ),
+        value: _isFullTank,
+        onChanged: (v) => setState(() => _isFullTank = v ?? true),
+        controlAffinity: ListTileControlAffinity.leading,
+      ),
+      const SizedBox(height: 12),
     ];
   }
 
   List<Widget> _buildOilChangeSection() {
+    final currency = ref.watch(currencyProvider);
+    final symbol = currencyInputSuffix(currency);
     return [
       const Text('Articles', style: TextStyle(fontWeight: FontWeight.bold)),
       ..._fixedItems.asMap().entries.map((entry) {
@@ -460,15 +545,17 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
                           Expanded(
                             flex: 2,
                             child: TextFormField(
-                              initialValue: item.price.toString(),
-                              decoration: const InputDecoration(
+                              initialValue:
+                                  formatMoneyForInput(item.price, currency),
+                              decoration: InputDecoration(
                                 labelText: 'Prix HT',
                                 isDense: true,
+                                suffixText: symbol,
                               ),
                               keyboardType: TextInputType.number,
                               onChanged: (v) => setState(
                                 () => _fixedItems[i] = _fixedItems[i].copyWith(
-                                  price: double.tryParse(v) ?? 0,
+                                  price: parseMoneyInput(v, currency),
                                 ),
                               ),
                             ),
@@ -557,6 +644,8 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
   List<Widget> _renderOtherItems() {
     return _otherItems.asMap().entries.map((entry) {
       final i = entry.key;
+      final currency = ref.watch(currencyProvider);
+      final symbol = currencyInputSuffix(currency);
       return Card(
         color: Colors.grey.shade50,
         child: ListTile(
@@ -571,16 +660,16 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
                 flex: 2,
                 child: TextFormField(
                   controller: _otherPriceControllers[i],
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Prix HT',
-                    suffixText: 'DT',
+                    suffixText: symbol,
                   ),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
                   onChanged: (v) => setState(
                     () => _otherItems[i] = _otherItems[i].copyWith(
-                      price: double.tryParse(v) ?? 0,
+                      price: parseMoneyInput(v, currency),
                     ),
                   ),
                 ),
@@ -633,18 +722,52 @@ class _EditMaintenanceScreenState extends ConsumerState<EditMaintenanceScreen> {
     }).toList();
   }
 
-  String _getLabel(MaintenanceType t) {
-    switch (t) {
-      case MaintenanceType.oilChange:
-        return 'Vidange';
-      case MaintenanceType.fuel:
-        return 'Carburant';
-      case MaintenanceType.technicalInspection:
-        return 'Contrôle Technique';
-      case MaintenanceType.repair:
-        return 'Réparation';
-      default:
-        return 'Autre';
+  void _refreshEstimatedDateIfNeeded() {
+    if (_nextDueMileageController.text.trim().isEmpty) return;
+    if (_nextDueDate != null && !_nextDueDateFromEstimate) return;
+    _estimateNextDueDateFromDpmc(notify: false);
+  }
+
+  Future<void> _estimateNextDueDateFromDpmc({bool notify = true}) async {
+    final nextKm = _nextDueMileage ??
+        double.tryParse(_nextDueMileageController.text.trim());
+    if (nextKm == null) return;
+
+    var vehicle = ref
+        .read(vehicleByIdStreamProvider(widget.maintenance.vehicleId))
+        .asData
+        ?.value;
+    if (vehicle == null) {
+      try {
+        vehicle = await ref.read(
+          vehicleByIdStreamProvider(widget.maintenance.vehicleId).future,
+        );
+      } catch (_) {
+        return;
+      }
+    }
+    final dpmc = vehicle?.dpmc;
+    if (dpmc == null || !mounted) return;
+
+    final estimated = estimateNextDueDateFromMileage(
+      dpmc: dpmc,
+      asOfDate: _selectedDate,
+      currentMileage: _selectedMileage,
+      nextDueMileage: nextKm,
+    );
+    if (estimated == null) return;
+
+    void apply() {
+      _nextDueMileage = nextKm;
+      _nextDueDate = estimated;
+      _nextDueDateFromEstimate = true;
+    }
+
+    if (notify) {
+      setState(apply);
+    } else {
+      apply();
     }
   }
+
 }

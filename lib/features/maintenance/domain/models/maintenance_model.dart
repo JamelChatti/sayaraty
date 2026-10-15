@@ -105,8 +105,11 @@ class Maintenance extends Equatable {
   final String? garageContact;
   final double cost;
   final String? receiptImageUrl;
+  final List<String> attachments;
   final double? nextDueMileage;
   final DateTime? nextDueDate;
+  /// Plein jusqu'au bouchon — requis pour calculer la conso L/100 km.
+  final bool isFullTank;
   final MaintenanceStatus status;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -126,8 +129,10 @@ class Maintenance extends Equatable {
     this.garageContact,
     required this.cost,
     this.receiptImageUrl,
+    this.attachments = const [],
     this.nextDueMileage,
     this.nextDueDate,
+    this.isFullTank = false,
     this.status = MaintenanceStatus.completed,
     required this.createdAt,
     this.updatedAt,
@@ -149,8 +154,10 @@ class Maintenance extends Equatable {
       'garageContact': garageContact,
       'cost': cost,
       'receiptImageUrl': receiptImageUrl,
+      'attachments': attachments,
       'nextDueMileage': nextDueMileage,
       'nextDueDate': nextDueDate?.millisecondsSinceEpoch,
+      'isFullTank': isFullTank,
       'status': status.name,
       'createdAt': createdAt.millisecondsSinceEpoch,
       'updatedAt': updatedAt?.millisecondsSinceEpoch,
@@ -174,8 +181,10 @@ class Maintenance extends Equatable {
     String? garageContact,
     double? cost,
     String? receiptImageUrl,
+    List<String>? attachments,
     Object? nextDueMileage = _unset,
     Object? nextDueDate = _unset,
+    bool? isFullTank,
     MaintenanceStatus? status,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -195,18 +204,29 @@ class Maintenance extends Equatable {
       garageContact: garageContact ?? this.garageContact,
       cost: cost ?? this.cost,
       receiptImageUrl: receiptImageUrl ?? this.receiptImageUrl,
+      attachments: attachments ?? this.attachments,
       nextDueMileage: identical(nextDueMileage, _unset)
           ? this.nextDueMileage
           : nextDueMileage as double?,
       nextDueDate: identical(nextDueDate, _unset)
           ? this.nextDueDate
           : nextDueDate as DateTime?,
+      isFullTank: isFullTank ?? this.isFullTank,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       ownerId: ownerId ?? this.ownerId,
       items: items ?? this.items,
     );
+  }
+
+  /// URLs des pièces jointes ; inclut l'ancien `receiptImageUrl` s'il n'est pas déjà listé.
+  static List<String> _attachmentsFromMap(Map<String, dynamic> map) {
+    final fromList = List<String>.from(map['attachments'] ?? []);
+    final receipt = map['receiptImageUrl'] as String?;
+    if (receipt == null || receipt.isEmpty) return fromList;
+    if (fromList.contains(receipt)) return fromList;
+    return [...fromList, receipt];
   }
 
   static DateTime _dateFromFirestore(dynamic value) {
@@ -246,8 +266,10 @@ class Maintenance extends Equatable {
       garageContact: map['garageContact'] as String?,
       cost: (map['cost'] as num?)?.toDouble() ?? 0.0,
       receiptImageUrl: map['receiptImageUrl'] as String?,
+      attachments: _attachmentsFromMap(map),
       nextDueMileage: (map['nextDueMileage'] as num?)?.toDouble(),
       nextDueDate: _optionalDateFromFirestore(map['nextDueDate']),
+      isFullTank: map['isFullTank'] as bool? ?? false,
       status: statusStr != null
           ? MaintenanceStatus.values.firstWhere(
               (e) => e.name == statusStr,
@@ -264,6 +286,12 @@ class Maintenance extends Equatable {
               .toList() ??
           [],
     );
+  }
+
+  /// Litres saisis sur un plein carburant.
+  double get fuelLiters {
+    if (type != MaintenanceType.fuel) return 0;
+    return items.fold<double>(0, (sum, i) => sum + i.quantity);
   }
 
   /// Prochaine échéance encore à venir (date future).
@@ -303,8 +331,10 @@ class Maintenance extends Equatable {
     garageContact,
     cost,
     receiptImageUrl,
+    attachments,
     nextDueMileage,
     nextDueDate,
+    isFullTank,
     status,
     createdAt,
     ownerId,

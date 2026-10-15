@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/models/routine_maintenance.dart';
 import '../domain/models/shared_access_model.dart';
 import '../domain/models/vehicule_model.dart';
 
@@ -116,6 +117,39 @@ class VehicleService {
       ) async {
     await _firestore.collection('vehicles').doc(vehicleId).update({
       'attachments': attachments,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// 🔹 Définir la photo principale du véhicule
+  Future<void> updateMainPhoto(String vehicleId, String photoUrl) async {
+    await _firestore.collection('vehicles').doc(vehicleId).update({
+      'mainPhotoUrl': photoUrl,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Enregistre un entretien de routine et met à jour le km du véhicule si besoin.
+  Future<void> recordRoutineService({
+    required String vehicleId,
+    required RoutineKind kind,
+    required double mileage,
+    required DateTime date,
+  }) async {
+    final snap = await _firestore.collection('vehicles').doc(vehicleId).get();
+    if (!snap.exists) return;
+    final vehicle = Vehicle.fromMap(snap.data()!, snap.id);
+    final routine = vehicle.routine.recordService(
+      kind: kind,
+      mileage: mileage,
+      date: date,
+    );
+    final nextMileage = vehicle.mileage == null
+        ? mileage
+        : (mileage > vehicle.mileage! ? mileage : vehicle.mileage);
+    await _firestore.collection('vehicles').doc(vehicleId).update({
+      'routine': routine.toMap(),
+      'mileage': nextMileage,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

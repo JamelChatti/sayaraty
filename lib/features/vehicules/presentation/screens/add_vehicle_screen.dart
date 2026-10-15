@@ -26,6 +26,7 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
   final _mileageController = TextEditingController();
   final _vinController = TextEditingController(); // Ajouté pour VIN
   final _formKey = GlobalKey<FormState>();
+  DateTime? _dpmc;
   DateTime? _insuranceExpiry;
   DateTime? _inspectionExpiry;
   DateTime? _taxExpiry;
@@ -71,9 +72,11 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
         yearController: _yearController,
         mileageController: _mileageController,
         vinController: _vinController, // Ajouté
+        dpmc: _dpmc,
         insuranceExpiry: _insuranceExpiry,
         inspectionExpiry: _inspectionExpiry,
         taxExpiry: _taxExpiry,
+        onDpmcChanged: (d) => setState(() => _dpmc = d),
         onInsuranceExpiryChanged: (d) => setState(() => _insuranceExpiry = d),
         onInspectionExpiryChanged: (d) => setState(() => _inspectionExpiry = d),
         onTaxExpiryChanged: (d) => setState(() => _taxExpiry = d),
@@ -108,6 +111,7 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
                   ? null
                   : _vinController.text.trim(),
               mileage: double.tryParse(_mileageController.text),
+              dpmc: _dpmc,
               insuranceExpiry: _insuranceExpiry,
               technicalInspectionExpiry: _inspectionExpiry,
               taxExpiry: _taxExpiry,

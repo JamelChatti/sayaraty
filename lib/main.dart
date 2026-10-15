@@ -7,12 +7,14 @@ import 'app/router.dart';
 import 'app/theme_provider.dart';
 import 'features/settings/application/settings_service.dart';
 import 'features/settings/domain/app_settings.dart';
+import 'features/vehicules/application/vehicle_expiry_notification_service.dart';
 import 'firebase_options.dart';
 import 'l10n/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await VehicleExpiryNotificationService.instance.initialize();
   // ✅ Charger les paramètres
   final settingsService = SettingsService();
   final settings = await settingsService.loadSettings();

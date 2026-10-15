@@ -8,9 +8,12 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/security/password_confirm_dialog.dart';
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../auth/domain/models/user_model.dart';
-import '../../../settings/application/settings_service.dart';
+import '../../../settings/application/currency_provider.dart';
 import '../../../settings/domain/app_settings.dart';
+import '../../../vehicules/application/vehicle_expiry_notification_service.dart';
+import '../../../vehicules/application/vehicle_service.dart';
 import '../../application/maintenance_service.dart';
+import '../../domain/maintenance_type_ui.dart';
 import '../../domain/models/maintenance_model.dart';
 import '../widgets/maintenance_due_banner.dart';
 import 'maintenance_detail_sceen.dart';
@@ -33,9 +36,7 @@ class MaintenanceListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(authStateNotifierProvider);
-    final currency =
-        ref.watch(appSettingsProvider).asData?.value.currency ??
-        CurrencyEnum.eur;
+    final currency = ref.watch(currencyProvider);
 
     return userAsync.when(
       loading: () =>
@@ -312,6 +313,13 @@ class MaintenanceListScreen extends ConsumerWidget {
       await ref
           .read(maintenanceServiceProvider)
           .clearDueReminder(maintenance.id);
+      final vehicles =
+          ref.read(vehiclesStreamProvider(maintenance.userId)).asData?.value;
+      if (vehicles != null) {
+        await ref
+            .read(vehicleExpiryNotificationServiceProvider)
+            .syncVehicles(vehicles, force: true);
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Rappel d\'échéance supprimé')),
@@ -561,51 +569,9 @@ class _MaintenanceListItem extends StatelessWidget {
     );
   }
 
-  Color _getTypeColor(MaintenanceType type) {
-    switch (type) {
-      case MaintenanceType.oilChange:
-        return Colors.deepPurple;
-      case MaintenanceType.brakes:
-        return Colors.orange;
-      case MaintenanceType.tires:
-        return Colors.brown;
-      case MaintenanceType.battery:
-        return Colors.red;
-      case MaintenanceType.timingBelt:
-        return Colors.pink;
-      case MaintenanceType.technicalInspection:
-        return Colors.blue;
-      case MaintenanceType.repair:
-        return Colors.redAccent;
-      case MaintenanceType.fuel:
-        return Colors.orangeAccent;
-      case MaintenanceType.other:
-        return Colors.grey;
-    }
-  }
+  Color _getTypeColor(MaintenanceType type) => MaintenanceTypeUi.color(type);
 
-  IconData _getTypeIcon(MaintenanceType type) {
-    switch (type) {
-      case MaintenanceType.oilChange:
-        return Icons.local_gas_station;
-      case MaintenanceType.brakes:
-        return Icons.directions_car_filled;
-      case MaintenanceType.tires:
-        return Icons.tire_repair;
-      case MaintenanceType.battery:
-        return Icons.battery_full;
-      case MaintenanceType.timingBelt:
-        return Icons.settings;
-      case MaintenanceType.technicalInspection:
-        return Icons.checklist;
-      case MaintenanceType.repair:
-        return Icons.build;
-      case MaintenanceType.fuel:
-        return Icons.build;
-      case MaintenanceType.other:
-        return Icons.more_horiz;
-    }
-  }
+  IconData _getTypeIcon(MaintenanceType type) => MaintenanceTypeUi.icon(type);
 
   Color _getStatusColor(MaintenanceStatus status) {
     switch (status) {

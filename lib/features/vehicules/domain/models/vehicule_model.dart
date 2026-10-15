@@ -1,5 +1,6 @@
 // lib/features/vehicles/domain/models/vehicle_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'routine_maintenance.dart';
 import 'shared_access_model.dart';
 
 class Vehicle {
@@ -17,10 +18,16 @@ class Vehicle {
   final int year;
   final double? mileage;
 
+  /// Date de première mise en circulation
+  final DateTime? dpmc;
+
   // Dates administratives
   final DateTime? insuranceExpiry;
   final DateTime? technicalInspectionExpiry;
   final DateTime? taxExpiry;
+
+  /// Intervalles d'entretiens de routine (vidange, pneus, chaîne, batterie).
+  final RoutineMaintenanceSettings routine;
 
   // Métadonnées
   final DateTime createdAt;
@@ -41,9 +48,11 @@ class Vehicle {
     this.vin,
     required this.year,
     this.mileage,
+    this.dpmc,
     this.insuranceExpiry,
     this.technicalInspectionExpiry,
     this.taxExpiry,
+    this.routine = const RoutineMaintenanceSettings(),
     required this.createdAt,
     this.updatedAt,
     this.attachments = const [],
@@ -115,9 +124,17 @@ class Vehicle {
       vin: map['vin'] as String?,
       year: (year as num).toInt(),
       mileage: (map['mileage'] as num?)?.toDouble(),
+      dpmc: toDate(map['dpmc'] ?? map['firstRegistrationDate']),
       insuranceExpiry: toDate(map['insuranceExpiry']),
-      technicalInspectionExpiry: toDate(map['technicalInspectionExpiry']),
-      taxExpiry: toDate(map['taxExpiry']),
+      technicalInspectionExpiry: toDate(
+        map['technicalInspectionExpiry'] ?? map['inspectionExpiry'],
+      ),
+      taxExpiry: toDate(map['taxExpiry'] ?? map['vignetteExpiry']),
+      routine: RoutineMaintenanceSettings.fromMap(
+        map['routine'] is Map
+            ? Map<String, dynamic>.from(map['routine'] as Map)
+            : null,
+      ),
       createdAt: toDate(createdAt)!,
       updatedAt: toDate(map['updatedAt']),
       attachments: List<String>.from(map['attachments'] ?? []),
@@ -138,16 +155,18 @@ class Vehicle {
       'vin': vin,
       'year': year,
       'mileage': mileage,
+      'dpmc': dpmc,
       'insuranceExpiry': insuranceExpiry,
       'technicalInspectionExpiry': technicalInspectionExpiry,
       'taxExpiry': taxExpiry,
+      'routine': routine.toMap(),
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'attachments': attachments,
       'sharedWith': sharedWith.map((access) => access.toMap()).toList(),
       'sharedWithUserIds': sharedWithUserIds,
       'mainPhotoUrl': mainPhotoUrl,
-      'ownerName':ownerName,
+      'ownerName': ownerName,
     };
   }
 
@@ -176,6 +195,8 @@ class Vehicle {
     return access.permissions;
   }
 
+  static const _unset = Object();
+
   Vehicle copyWith({
     String? id,
     String? userId,
@@ -186,9 +207,11 @@ class Vehicle {
     String? vin,
     int? year,
     double? mileage,
-    DateTime? insuranceExpiry,
-    DateTime? technicalInspectionExpiry,
-    DateTime? taxExpiry,
+    Object? dpmc = _unset,
+    Object? insuranceExpiry = _unset,
+    Object? technicalInspectionExpiry = _unset,
+    Object? taxExpiry = _unset,
+    RoutineMaintenanceSettings? routine,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<String>? attachments,
@@ -206,10 +229,17 @@ class Vehicle {
       vin: vin ?? this.vin,
       year: year ?? this.year,
       mileage: mileage ?? this.mileage,
-      insuranceExpiry: insuranceExpiry ?? this.insuranceExpiry,
-      technicalInspectionExpiry:
-      technicalInspectionExpiry ?? this.technicalInspectionExpiry,
-      taxExpiry: taxExpiry ?? this.taxExpiry,
+      dpmc: identical(dpmc, _unset) ? this.dpmc : dpmc as DateTime?,
+      insuranceExpiry: identical(insuranceExpiry, _unset)
+          ? this.insuranceExpiry
+          : insuranceExpiry as DateTime?,
+      technicalInspectionExpiry: identical(technicalInspectionExpiry, _unset)
+          ? this.technicalInspectionExpiry
+          : technicalInspectionExpiry as DateTime?,
+      taxExpiry: identical(taxExpiry, _unset)
+          ? this.taxExpiry
+          : taxExpiry as DateTime?,
+      routine: routine ?? this.routine,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       attachments: attachments ?? this.attachments,

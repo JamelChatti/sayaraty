@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,15 +6,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/app_settings.dart';
 
-
 final settingsServiceProvider = Provider<SettingsService>((ref) {
   return SettingsService();
 });
 
-final appSettingsProvider = FutureProvider<AppSettings>((ref) async {
-  final service = ref.watch(settingsServiceProvider);
-  return service.loadSettings();
-});
+final appSettingsProvider =
+    AsyncNotifierProvider<AppSettingsNotifier, AppSettings>(
+  AppSettingsNotifier.new,
+);
+
+class AppSettingsNotifier extends AsyncNotifier<AppSettings> {
+  @override
+  Future<AppSettings> build() {
+    return ref.read(settingsServiceProvider).loadSettings();
+  }
+
+  Future<void> save(AppSettings settings) async {
+    await ref.read(settingsServiceProvider).saveSettings(settings);
+    state = AsyncData(settings);
+  }
+}
 
 class SettingsService {
   static const _key = 'app_settings';
@@ -31,22 +41,12 @@ class SettingsService {
   Future<void> saveSettings(AppSettings settings) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = jsonEncode(settings.toMap());
-    //await prefs.setString(_key, jsonString);
-    await prefs.setString('app_settings', jsonString);
+    await prefs.setString(_key, jsonString);
   }
 
   Future<void> logout() async {
-    // Vous pouvez aussi vider les données utilisateur ici
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // ou seulement supprimer les clés pertinentes
-    // Et déconnecter de Firebase
+    await prefs.clear();
     await FirebaseAuth.instance.signOut();
   }
-
-  final currencyProvider = Provider<CurrencyEnum>((ref) {
-    final settings = ref.watch(appSettingsProvider).asData?.value;
-    return settings?.currency ?? CurrencyEnum.eur;
-  });
-
-
 }

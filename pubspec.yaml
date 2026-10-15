@@ -2,7 +2,7 @@ name: sayaraty
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+2
+version: 1.0.0+5
 
 environment:
   sdk: ^3.10.0
@@ -35,6 +35,12 @@ dependencies:
   flutter_localization: ^0.3.3
   dropdown_search: ^5.0.6
   diacritic: ^0.1.6
+  installed_apps: ^2.1.1
+  path: ^1.9.1
+  google_mlkit_document_scanner: ^0.5.0
+  flutter_local_notifications: ^22.3.1
+  timezone: ^0.11.1
+  flutter_timezone: ^5.1.1
 
 
 

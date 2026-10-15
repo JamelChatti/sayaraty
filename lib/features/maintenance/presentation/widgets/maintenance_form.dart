@@ -1,8 +1,12 @@
 // lib/features/maintenance/presentation/widgets/maintenance_form.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/utils/currency_utils.dart';
+import '../../../settings/application/currency_provider.dart';
 import '../../domain/models/maintenance_model.dart';
 
-class MaintenanceForm extends StatefulWidget {
+class MaintenanceForm extends ConsumerStatefulWidget {
   final Maintenance? initialMaintenance; // null = ajout, non null = édition
   final String vehicleName;
   final void Function(Maintenance) onSave;
@@ -15,10 +19,10 @@ class MaintenanceForm extends StatefulWidget {
   });
 
   @override
-  State<MaintenanceForm> createState() => _MaintenanceFormState();
+  ConsumerState<MaintenanceForm> createState() => _MaintenanceFormState();
 }
 
-class _MaintenanceFormState extends State<MaintenanceForm> {
+class _MaintenanceFormState extends ConsumerState<MaintenanceForm> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
@@ -49,7 +53,9 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
       _descriptionController = TextEditingController(text: m.description);
       _garageNameController = TextEditingController(text: m.garageName);
       _garageContactController = TextEditingController(text: m.garageContact);
-      _costController = TextEditingController(text: m.cost.toString());
+      _costController = TextEditingController(
+        text: formatMoneyForInput(m.cost, ref.read(currencyProvider)),
+      );
       _mileageController = TextEditingController(text: m.mileage.toString());
     } else {
       // Mode AJOUT
@@ -126,6 +132,9 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
 
   @override
   Widget build(BuildContext context) {
+    final currency = ref.watch(currencyProvider);
+    final symbol = currencyInputSuffix(currency);
+
     return Form(
       key: _formKey,
       child: ListView(
@@ -240,8 +249,13 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
           TextFormField(
             controller: _costController,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Coût total (€) *'),
-            validator: (v) => v!.trim().isEmpty || double.tryParse(v) == null
+            decoration: InputDecoration(
+              labelText: usesMillimeInput(currency)
+                  ? 'Coût total (millimes) *'
+                  : 'Coût total *',
+              suffixText: symbol,
+            ),
+            validator: (v) => v!.trim().isEmpty || double.tryParse(v.replaceAll(',', '.')) == null
                 ? 'Coût invalide'
                 : null,
           ),
@@ -273,7 +287,7 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
                 garageContact: _garageContactController.text.trim().isEmpty
                     ? null
                     : _garageContactController.text.trim(),
-                cost: double.parse(_costController.text.trim()),
+                cost: parseMoneyInput(_costController.text, currency),
                 receiptImageUrl: null,
                 nextDueMileage: _nextDueMileage,
                 nextDueDate: _nextDueDate,

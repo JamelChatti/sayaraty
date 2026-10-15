@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 import '../../../../app/app_theme.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../settings/application/currency_provider.dart';
+import '../../application/maintenance_service.dart';
 import '../../domain/models/maintenance_model.dart';
+import '../widgets/maintenance_attachment_section.dart';
 
 class MaintenanceDetailScreen extends ConsumerWidget {
   final Maintenance maintenance;
@@ -18,16 +20,20 @@ class MaintenanceDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final liveAsync =
+        ref.watch(maintenanceByIdStreamProvider(maintenance.id));
+    final live = liveAsync.asData?.value ?? maintenance;
+
     final currency = ref.watch(currencyProvider);
     final theme = Theme.of(context);
-    final garageName = maintenance.garageName?.trim();
-    final garageContact = maintenance.garageContact?.trim();
-    final description = maintenance.description?.trim();
+    final garageName = live.garageName?.trim();
+    final garageContact = live.garageContact?.trim();
+    final description = live.description?.trim();
     final hasAdditionalInfo =
         (garageName != null && garageName.isNotEmpty) ||
         (description != null && description.isNotEmpty) ||
-        maintenance.nextDueMileage != null ||
-        maintenance.nextDueDate != null;
+        live.nextDueMileage != null ||
+        live.nextDueDate != null;
 
     return Scaffold(
       appBar: AppBar(title: Text(vehicleName)),
@@ -46,14 +52,14 @@ class MaintenanceDetailScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    maintenance.title,
+                    live.title,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    formatCurrency(maintenance.cost, currency),
+                    formatCurrency(live.cost, currency),
                     style: theme.textTheme.displaySmall?.copyWith(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.bold,
@@ -66,15 +72,31 @@ class MaintenanceDetailScreen extends ConsumerWidget {
                       _infoColumn(
                         Icons.calendar_today,
                         'Date',
-                        DateFormat('dd/MM/yyyy').format(maintenance.date),
+                        DateFormat('dd/MM/yyyy').format(live.date),
                       ),
                       _infoColumn(
                         Icons.speed,
                         'Kilométrage',
-                        '${maintenance.mileage.toStringAsFixed(0)} km',
+                        '${live.mileage.toStringAsFixed(0)} km',
                       ),
                     ],
                   ),
+                  if (live.type == MaintenanceType.fuel) ...[
+                    const SizedBox(height: 12),
+                    Chip(
+                      avatar: Icon(
+                        live.isFullTank
+                            ? Icons.check_circle
+                            : Icons.water_drop_outlined,
+                        size: 18,
+                      ),
+                      label: Text(
+                        live.isFullTank
+                            ? 'Plein complet — ${live.fuelLiters.toStringAsFixed(1)} L'
+                            : 'Plein partiel — ${live.fuelLiters.toStringAsFixed(1)} L',
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -82,10 +104,10 @@ class MaintenanceDetailScreen extends ConsumerWidget {
 
           const SizedBox(height: 16),
 
-          if (maintenance.items.isNotEmpty) ...[
+          if (live.items.isNotEmpty) ...[
             _sectionTitle(theme, 'Articles et pièces'),
             const SizedBox(height: 8),
-            ...maintenance.items.map((item) {
+            ...live.items.map((item) {
               final priceTTC = item.priceWithTax;
 
               return Card(
@@ -153,31 +175,33 @@ class MaintenanceDetailScreen extends ConsumerWidget {
                     title: const Text('Notes globales'),
                     subtitle: Text(description),
                   ),
-                if (maintenance.nextDueMileage != null ||
-                    maintenance.nextDueDate != null)
+                if (live.nextDueMileage != null || live.nextDueDate != null)
                   Container(
                     color:
-                        (maintenance.isDueOverdue
+                        (live.isDueOverdue
                                 ? AppTheme.overdue
                                 : AppTheme.dueSoon)
                             .withValues(alpha: 0.12),
                     child: ListTile(
                       leading: Icon(
                         Icons.notifications_active,
-                        color: maintenance.isDueOverdue
+                        color: live.isDueOverdue
                             ? AppTheme.overdue
                             : AppTheme.dueSoon,
                       ),
                       title: const Text('Prochaine échéance'),
                       subtitle: Text(
-                        '${maintenance.nextDueMileage?.toStringAsFixed(0) ?? "?"} km'
-                        ' ou le ${maintenance.nextDueDate != null ? DateFormat('dd/MM/yyyy').format(maintenance.nextDueDate!) : "?"}',
+                        '${live.nextDueMileage?.toStringAsFixed(0) ?? "?"} km'
+                        ' ou le ${live.nextDueDate != null ? DateFormat('dd/MM/yyyy').format(live.nextDueDate!) : "?"}',
                       ),
                     ),
                   ),
               ],
             ),
           ),
+
+          const SizedBox(height: 24),
+          MaintenanceAttachmentSection(maintenanceId: live.id),
           const SizedBox(height: 100),
         ],
       ),

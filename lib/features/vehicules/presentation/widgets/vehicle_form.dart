@@ -10,10 +10,12 @@ class VehicleForm extends StatelessWidget {
   final TextEditingController plateController;
   final TextEditingController yearController;
   final TextEditingController mileageController;
-  final TextEditingController vinController; // Ajouté
+  final TextEditingController vinController;
+  final DateTime? dpmc;
   final DateTime? insuranceExpiry;
   final DateTime? inspectionExpiry;
   final DateTime? taxExpiry;
+  final Function(DateTime?) onDpmcChanged;
   final Function(DateTime?) onInsuranceExpiryChanged;
   final Function(DateTime?) onInspectionExpiryChanged;
   final Function(DateTime?) onTaxExpiryChanged;
@@ -26,24 +28,29 @@ class VehicleForm extends StatelessWidget {
     required this.plateController,
     required this.yearController,
     required this.mileageController,
-    required this.vinController, // Ajouté
+    required this.vinController,
+    this.dpmc,
     this.insuranceExpiry,
     this.inspectionExpiry,
     this.taxExpiry,
+    required this.onDpmcChanged,
     required this.onInsuranceExpiryChanged,
     required this.onInspectionExpiryChanged,
     required this.onTaxExpiryChanged,
   });
 
   Future<void> _selectDate(
-      BuildContext context,
-      Function(DateTime?) onChanged,
-      ) async {
+    BuildContext context,
+    Function(DateTime?) onChanged, {
+    DateTime? initialDate,
+    DateTime? firstDate,
+    DateTime? lastDate,
+  }) async {
     final selected = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2030),
+      initialDate: initialDate ?? DateTime.now(),
+      firstDate: firstDate ?? DateTime(1980),
+      lastDate: lastDate ?? DateTime(DateTime.now().year + 5),
     );
     if (selected != null) {
       onChanged(selected);
@@ -62,9 +69,9 @@ class VehicleForm extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Marque
           DropdownButtonFormField<String>(
-            initialValue: brandController.text.isEmpty ? null : brandController.text,
+            initialValue:
+                brandController.text.isEmpty ? null : brandController.text,
             onChanged: (value) {
               if (value != null) {
                 brandController.text = value;
@@ -85,8 +92,6 @@ class VehicleForm extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-
-          // Modèle
           TextFormField(
             controller: modelController,
             decoration: const InputDecoration(
@@ -101,8 +106,6 @@ class VehicleForm extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-
-          // Année
           TextFormField(
             controller: yearController,
             keyboardType: TextInputType.number,
@@ -115,15 +118,15 @@ class VehicleForm extends StatelessWidget {
                 return 'L\'année est obligatoire';
               }
               final year = int.tryParse(value);
-              if (year == null || year < 1900 || year > DateTime.now().year + 1) {
+              if (year == null ||
+                  year < 1900 ||
+                  year > DateTime.now().year + 1) {
                 return 'Année invalide';
               }
               return null;
             },
           ),
           const SizedBox(height: 16),
-
-          // Numéro d'immatriculation
           TextFormField(
             controller: plateController,
             decoration: const InputDecoration(
@@ -132,8 +135,6 @@ class VehicleForm extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-
-          // VIN (Numéro de série)
           TextFormField(
             controller: vinController,
             decoration: const InputDecoration(
@@ -142,8 +143,6 @@ class VehicleForm extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Kilométrage
           TextFormField(
             controller: mileageController,
             keyboardType: TextInputType.number,
@@ -152,38 +151,55 @@ class VehicleForm extends StatelessWidget {
               hintText: 'ex: 15000',
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Dates d'expiration
+          _buildDateSection(
+            context,
+            title: 'DPMC',
+            subtitle: 'Date de première mise en circulation',
+            date: dpmc,
+            onTap: () => _selectDate(
+              context,
+              onDpmcChanged,
+              initialDate: dpmc ?? DateTime(DateTime.now().year - 5),
+              firstDate: DateTime(1980),
+              lastDate: DateTime.now(),
+            ),
+            onClear: () => onDpmcChanged(null),
+          ),
           _buildDateSection(
             context,
             title: 'Assurance',
             date: insuranceExpiry,
             onTap: () => _selectDate(context, onInsuranceExpiryChanged),
+            onClear: () => onInsuranceExpiryChanged(null),
           ),
           _buildDateSection(
             context,
             title: 'Contrôle technique',
             date: inspectionExpiry,
             onTap: () => _selectDate(context, onInspectionExpiryChanged),
+            onClear: () => onInspectionExpiryChanged(null),
           ),
           _buildDateSection(
             context,
             title: 'Taxe',
             date: taxExpiry,
             onTap: () => _selectDate(context, onTaxExpiryChanged),
+            onClear: () => onTaxExpiryChanged(null),
           ),
+          const SizedBox(height: 80),
         ],
       ),
     );
   }
 
   Widget _buildDateSection(
-      BuildContext context, {
-        required String title,
-        required DateTime? date,
-        required VoidCallback onTap,
-      }) {
+    BuildContext context, {
+    required String title,
+    String? subtitle,
+    required DateTime? date,
+    required VoidCallback onTap,
+    required VoidCallback onClear,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -195,6 +211,13 @@ class VehicleForm extends StatelessWidget {
             color: Colors.grey[700],
           ),
         ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
+        ],
         const SizedBox(height: 8),
         GestureDetector(
           onTap: onTap,
@@ -212,15 +235,7 @@ class VehicleForm extends StatelessWidget {
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.clear, size: 20),
-                  onPressed: () {
-                    if (title == 'Assurance') {
-                      onInsuranceExpiryChanged(null);
-                    } else if (title == 'Contrôle technique') {
-                      onInspectionExpiryChanged(null);
-                    } else if (title == 'Taxe') {
-                      onTaxExpiryChanged(null);
-                    }
-                  },
+                  onPressed: onClear,
                   tooltip: 'Effacer',
                 ),
               ],

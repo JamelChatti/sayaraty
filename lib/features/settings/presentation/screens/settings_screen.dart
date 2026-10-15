@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/theme_provider.dart';
 import '../../application/settings_service.dart';
 import '../../domain/app_settings.dart';
+import '../widgets/hide_apps_sheet.dart';
 
 
 class SettingsScreen extends ConsumerWidget {
@@ -42,9 +43,8 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     super.initState();
   }
 
-  void _saveSettings() {
-    ref.read(settingsServiceProvider).saveSettings(_settings);
-    // Optionnel : recharger l'UI ou appliquer les changements
+  Future<void> _saveSettings() async {
+    await ref.read(appSettingsProvider.notifier).save(_settings);
   }
 
   ThemeMode _mapToThemeMode(ThemeModeEnum e) {
@@ -114,14 +114,52 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
           // 💰 Devise
           ListTile(
             title: const Text('Devise'),
-            subtitle: Text('Actuelle : ${_settings.currency.name.toUpperCase()}'),
+            subtitle: Text(
+              _settings.currency == CurrencyEnum.tnd
+                  ? 'TND — saisie en millimes, affichage en dinars'
+                  : 'Actuelle : ${_settings.currency.name.toUpperCase()}',
+            ),
             trailing: DropdownButton<CurrencyEnum>(
               value: _settings.currency,
               items: CurrencyEnum.values.map((e) => DropdownMenuItem(value: e, child: Text(e.name.toUpperCase()))).toList(),
-              onChanged: (v) {
+              onChanged: (v) async {
                 if (v == null) return;
                 setState(() => _settings = _settings.copyWith(currency: v));
-                ref.read(settingsServiceProvider).saveSettings(_settings);
+                await _saveSettings();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Devise : ${v.name.toUpperCase()} — appliquée dans toute l’application',
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          GestureDetector(
+            onDoubleTap: () => showHideAppsSheet(context),
+            child: ListTile(
+              leading: const Icon(Icons.apps),
+              title: const Text('Autres'),
+              subtitle: const Text('Double-tapez pour masquer des icônes'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                showDialog<void>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Bienvenue'),
+                    content: const Text('Coming soon'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  ),
+                );
               },
             ),
           ),

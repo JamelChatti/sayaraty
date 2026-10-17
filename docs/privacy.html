@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Règles de confidentialité — Sayaraty</title>
+  <style>
+    body { font-family: Georgia, serif; line-height: 1.55; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.2rem; margin-top: 2rem; }
+    p, li { font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Règles de confidentialité de Sayaraty</h1>
+  <p>Dernière mise à jour : 16 octobre 2026.</p>
+  <p>Sayaraty est une application de suivi de véhicules et d’entretiens. Ces règles décrivent les données traitées par l’application, leur usage et les tiers qui les reçoivent. Elles s’appliquent uniquement à Sayaraty.</p>
+
+  <h2>Responsable</h2>
+  <p>L’éditeur de l’application Sayaraty. Pour une question sur vos données, utilisez l’adresse e-mail du développeur indiquée sur la fiche Google Play de Sayaraty.</p>
+
+  <h2>Données de compte</h2>
+  <p>À l’inscription, Sayaraty enregistre votre adresse e-mail, votre nom et un mot de passe. Le mot de passe est géré par Firebase Authentication (Google) et n’est pas lisible par l’éditeur. Le rôle du compte (particulier, professionnel ou société) est enregistré avec le profil.</p>
+
+  <h2>Données des véhicules et des entretiens</h2>
+  <p>Les informations que vous saisissez sont stockées pour afficher le carnet du véhicule : marque, modèle, immatriculation, numéro de châssis, kilométrage, dates (mise en circulation, assurance, visite technique, vignette), motorisation, carburant, interventions, prix, pièces, et pièces jointes (photos ou PDF).</p>
+  <p>Ces données sont enregistrées dans Cloud Firestore et Firebase Storage, services de Google, afin de les retrouver sur vos appareils connectés au même compte.</p>
+
+  <h2>Partage d’un véhicule</h2>
+  <p>Si vous partagez un véhicule, Sayaraty crée une invitation (code, droits d’accès, e-mail du destinataire s’il est connu). La personne invitée n’accède aux données du véhicule qu’après avoir accepté l’invitation dans l’application. Vous pouvez retirer cet accès.</p>
+  <p>Le message d’invitation peut être envoyé par une autre application de votre téléphone (messagerie, SMS, e-mail). Sayaraty ne choisit pas cette application et ne lit pas vos conversations.</p>
+
+  <h2>Contacts du téléphone</h2>
+  <p>Si vous autorisez l’accès aux contacts, Sayaraty les lit sur l’appareil pour proposer une personne à inviter. Seules les adresses e-mail utiles à cette recherche sont comparées aux comptes Sayaraty. Le carnet d’adresses complet n’est pas copié sur les serveurs de Sayaraty.</p>
+
+  <h2>Appareil photo et fichiers</h2>
+  <p>L’appareil photo et les fichiers ne sont utilisés que lorsque vous ajoutez une photo ou un document à un véhicule. Ces fichiers sont envoyés vers Firebase Storage, liés à votre compte.</p>
+
+  <h2>Notifications et alarmes</h2>
+  <p>Sayaraty peut afficher des notifications locales pour rappeler une échéance (assurance, visite technique, vignette, entretien). La planification utilise l’alarme du téléphone. Ces rappels sont calculés sur l’appareil à partir des dates que vous avez saisies. Aucun service de notification push n’est utilisé pour ce rappel.</p>
+
+  <h2>Applications installées</h2>
+  <p>Dans les paramètres, vous pouvez masquer des icônes d’applications. Pour afficher cette liste, Sayaraty lit le nom des applications installées sur l’appareil. Ce choix reste enregistré localement sur le téléphone et n’est pas envoyé au serveur.</p>
+
+  <h2>Ce que Sayaraty ne fait pas</h2>
+  <ul>
+    <li>Sayaraty ne vend pas vos données.</li>
+    <li>Sayaraty n’affiche pas de publicité.</li>
+    <li>Sayaraty ne demande pas votre position.</li>
+    <li>Sayaraty n’est pas destinée aux enfants et ne collecte pas sciemment de données d’enfants de moins de 13 ans.</li>
+    <li>Sayaraty ne fournit pas de service bancaire, de paiement ni de suivi médical. Les montants saisis servent uniquement à noter le coût d’un entretien.</li>
+  </ul>
+
+  <h2>Tiers</h2>
+  <p>Les données de compte, de véhicules, d’entretiens et de fichiers sont hébergées par Google Firebase (Authentication, Cloud Firestore, Cloud Storage). La fiche et la distribution de l’application passent par Google Play. Ces prestataires traitent les données pour faire fonctionner le service, selon leurs propres règles.</p>
+  <p>Aucun autre tiers ne reçoit votre carnet de véhicule pour de la publicité ou de la revente.</p>
+
+  <h2>Durée et suppression</h2>
+  <p>Les données restent tant que votre compte existe. Vous pouvez supprimer un véhicule ou une intervention dans l’application. Pour supprimer le compte et les données associées, écrivez à l’adresse du développeur indiquée sur la fiche Play. La déconnexion dans l’application n’efface pas les données du serveur.</p>
+
+  <h2>Sécurité</h2>
+  <p>L’accès au compte est protégé par le mot de passe. Les échanges avec Firebase utilisent une connexion chiffrée. Aucune méthode n’est absolument sûre.</p>
+
+  <h2>Vos choix</h2>
+  <p>Vous pouvez refuser les contacts, l’appareil photo ou les notifications dans les réglages du téléphone. Certaines fonctions (partage depuis le carnet, photo, rappel) ne seront alors pas disponibles.</p>
+
+  <h2>Modifications</h2>
+  <p>Cette page peut être mise à jour. La date en haut de la page indique la dernière version. La poursuite de l’utilisation après une mise à jour vaut acceptation des règles modifiées.</p>
+</body>
+</html>

@@ -25,7 +25,12 @@ class AuthService {
         return AppUser.fromMap(doc.data()!..['uid'] = firebaseUser.uid);
       } catch (e) {
         print('Erreur lors de la récupération de l\'utilisateur: $e');
-        return null;
+        return AppUser(
+          uid: firebaseUser.uid,
+          email: firebaseUser.email ?? '',
+          name: firebaseUser.displayName,
+          role: 'owner',
+        );
       }
     });
   }
@@ -40,7 +45,7 @@ class AuthService {
         'uid': firebaseUser.uid,
         'email': firebaseUser.email ?? '',
         'name': firebaseUser.displayName ?? '',
-        'role': 'user', // Valeur par défaut
+        'role': 'owner',
         'companyId': null,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -69,15 +74,23 @@ class AuthService {
 
       final uid = userCredential.user!.uid;
 
+      final normalizedEmail = email.trim().toLowerCase();
+
       // Créer le document utilisateur dans Firestore
       await _firestore.collection('users').doc(uid).set({
         'uid': uid,
-        'email': email,
+        'email': normalizedEmail,
         'name': name,
         'role': role,
         'companyId': companyId,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // Rattacher les invitations de partage en attente pour cet email.
+      await _claimPendingShareInvitations(
+        userId: uid,
+        email: normalizedEmail,
+      );
 
       return null;
     } on FirebaseAuthException catch (e) {
@@ -97,11 +110,57 @@ class AuthService {
       // S'assurer que le document utilisateur existe après la connexion
       await ensureUserExists();
 
+      final user = _auth.currentUser;
+      if (user?.email != null) {
+        await _claimPendingShareInvitations(
+          userId: user!.uid,
+          email: user.email!,
+        );
+      }
+
       return null;
     } on FirebaseAuthException catch (e) {
       return _getErrorMessage(e);
     } catch (e) {
       return 'Une erreur inattendue est survenue';
+    }
+  }
+
+  Future<void> _claimPendingShareInvitations({
+    required String userId,
+    required String email,
+  }) async {
+    try {
+      final normalized = email.trim().toLowerCase();
+      final snap = await _firestore
+          .collection('shareInvitations')
+          .where('toEmail', isEqualTo: normalized)
+          .get();
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (data['status'] != 'pending') continue;
+        if (data['toUserId'] == userId) continue;
+        await doc.reference.update({'toUserId': userId});
+      }
+    } catch (e) {
+      print('Claim share invitations failed: $e');
+    }
+  }
+
+  /// Envoie l'email Firebase pour choisir un nouveau mot de passe.
+  Future<String?> sendPasswordResetEmail(String email) async {
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty || !normalized.contains('@')) {
+      return 'Saisissez une adresse e-mail valide';
+    }
+    try {
+      await _auth.sendPasswordResetEmail(email: normalized);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return _getErrorMessage(e);
+    } catch (_) {
+      return 'Impossible d\'envoyer l\'e-mail de réinitialisation';
     }
   }
 

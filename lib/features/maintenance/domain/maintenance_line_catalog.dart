@@ -1,9 +1,122 @@
 import 'models/maintenance_item.dart';
 import 'models/maintenance_model.dart';
 
+/// Derniers prix / infos saisis pour un élément sur un véhicule.
+class LineItemDefaults {
+  final double price;
+  final double taxRate;
+  final String? brand;
+
+  const LineItemDefaults({
+    required this.price,
+    required this.taxRate,
+    this.brand,
+  });
+}
+
 /// Catalogue d'éléments d'intervention (extensible via « Ajouter »).
 class MaintenanceLineCatalog {
   const MaintenanceLineCatalog._();
+
+  static String categoryKey(String category) => 'cat:$category';
+
+  static String nameKey(String name) =>
+      'name:${name.trim().toLowerCase()}';
+
+  static String itemKey(MaintenanceItem item) {
+    if (item.category.isNotEmpty &&
+        item.category != 'other' &&
+        item.category != 'fixed') {
+      return categoryKey(item.category);
+    }
+    final name = item.name.trim().toLowerCase();
+    return name.isEmpty ? '' : nameKey(item.name);
+  }
+
+  /// Recherche le dernier prix connu (catégorie puis nom — rétrocompat).
+  static LineItemDefaults? lookupDefaults(
+    MaintenanceItem item,
+    Map<String, LineItemDefaults> defaults,
+  ) {
+    if (defaults.isEmpty) return null;
+    if (item.category.isNotEmpty &&
+        item.category != 'other' &&
+        item.category != 'fixed') {
+      final byCat = defaults[categoryKey(item.category)];
+      if (byCat != null) return byCat;
+    }
+    final name = item.name.trim();
+    if (name.isNotEmpty) {
+      final byName = defaults[nameKey(name)];
+      if (byName != null) return byName;
+      // Alias fréquents
+      if (name.toLowerCase().contains('carburant') ||
+          name.toLowerCase() == 'plein carburant') {
+        return defaults[categoryKey('fuel')] ??
+            defaults[nameKey('Carburant')];
+      }
+    }
+    return defaults[itemKey(item)];
+  }
+
+  /// Dernier prix HT (et TVA / marque) par élément, du plus récent au plus ancien.
+  /// Indexé à la fois par catégorie et par nom pour les anciennes données.
+  static Map<String, LineItemDefaults> lastDefaultsFromHistory(
+    List<Maintenance> history,
+  ) {
+    final sorted = List<Maintenance>.from(history)
+      ..sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        if (byDate != 0) return byDate;
+        return (b.updatedAt ?? b.createdAt)
+            .compareTo(a.updatedAt ?? a.createdAt);
+      });
+    final map = <String, LineItemDefaults>{};
+
+    for (final m in sorted) {
+      for (final item in m.items) {
+        if (item.price <= 0) continue;
+        final defaults = LineItemDefaults(
+          price: item.price,
+          taxRate: item.taxRate,
+          brand: item.brand,
+        );
+        if (item.category.isNotEmpty &&
+            item.category != 'other' &&
+            item.category != 'fixed') {
+          map.putIfAbsent(categoryKey(item.category), () => defaults);
+        }
+        final name = item.name.trim();
+        if (name.isNotEmpty) {
+          map.putIfAbsent(nameKey(name), () => defaults);
+        }
+        // Anciens pleins
+        if (m.type == MaintenanceType.fuel || item.category == 'fuel') {
+          map.putIfAbsent(categoryKey('fuel'), () => defaults);
+          map.putIfAbsent(nameKey('Carburant'), () => defaults);
+        }
+      }
+    }
+    return map;
+  }
+
+  /// Applique les derniers prix uniquement si le prix actuel est vide (0).
+  static List<MaintenanceItem> applyLastDefaults(
+    List<MaintenanceItem> items,
+    Map<String, LineItemDefaults> defaults,
+  ) {
+    if (defaults.isEmpty) return items;
+    return items.map((item) {
+      if (item.price > 0) return item;
+      final d = lookupDefaults(item, defaults);
+      if (d == null) return item;
+      return item.copyWith(
+        price: d.price,
+        taxRate: item.category == 'fuel' ? item.taxRate : d.taxRate,
+        brand: (item.brand == null || item.brand!.isEmpty) ? d.brand : item.brand,
+      );
+    }).toList();
+  }
 
   static const oilCategories = {
     'oil_filter',

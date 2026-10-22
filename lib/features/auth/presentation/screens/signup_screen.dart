@@ -21,6 +21,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   String _selectedRole = AppRoles.owner;
   bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
 
   @override
   void dispose() {
@@ -115,8 +117,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               // Mot de passe
               TextFormField(
                 controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Mot de passe'),
-                obscureText: true,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Mot de passe',
+                  suffixIcon: IconButton(
+                    tooltip: _obscurePassword
+                        ? 'Afficher le mot de passe'
+                        : 'Masquer le mot de passe',
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
                 validator: (value) {
                   if (value == null || value.length < 6) {
                     return 'Le mot de passe doit avoir au moins 6 caractères';
@@ -129,8 +145,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               // Confirmer mot de passe
               TextFormField(
                 controller: _confirmPasswordController,
-                decoration: const InputDecoration(labelText: 'Confirmer le mot de passe'),
-                obscureText: true,
+                obscureText: _obscureConfirm,
+                decoration: InputDecoration(
+                  labelText: 'Confirmer le mot de passe',
+                  suffixIcon: IconButton(
+                    tooltip: _obscureConfirm
+                        ? 'Afficher le mot de passe'
+                        : 'Masquer le mot de passe',
+                    icon: Icon(
+                      _obscureConfirm
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureConfirm = !_obscureConfirm),
+                  ),
+                ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Veuillez confirmer le mot de passe';

@@ -47,5 +47,7 @@
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSContactsUsageDescription</key>
+		<string>Sayaraty utilise vos contacts pour trouver les personnes avec qui partager un véhicule, comme sur WhatsApp.</string>
 	</dict>
 </plist>

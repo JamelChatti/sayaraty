@@ -30,6 +30,8 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
   DateTime? _insuranceExpiry;
   DateTime? _inspectionExpiry;
   DateTime? _taxExpiry;
+  VehiclePowertrain? _powertrain;
+  VehicleFuelType? _fuelType;
 
   @override
   void initState() {
@@ -71,7 +73,14 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
         plateController: _plateController,
         yearController: _yearController,
         mileageController: _mileageController,
-        vinController: _vinController, // Ajouté
+        vinController: _vinController,
+        powertrain: _powertrain,
+        fuelType: _fuelType,
+        onPowertrainChanged: (p) => setState(() {
+          _powertrain = p;
+          if (p == VehiclePowertrain.electric) _fuelType = null;
+        }),
+        onFuelTypeChanged: (f) => setState(() => _fuelType = f),
         dpmc: _dpmc,
         insuranceExpiry: _insuranceExpiry,
         inspectionExpiry: _inspectionExpiry,
@@ -111,6 +120,10 @@ class _AddVehicleScreenState extends ConsumerState<AddVehicleScreen> {
                   ? null
                   : _vinController.text.trim(),
               mileage: double.tryParse(_mileageController.text),
+              powertrain: _powertrain,
+              fuelType: _powertrain == VehiclePowertrain.electric
+                  ? null
+                  : _fuelType,
               dpmc: _dpmc,
               insuranceExpiry: _insuranceExpiry,
               technicalInspectionExpiry: _inspectionExpiry,

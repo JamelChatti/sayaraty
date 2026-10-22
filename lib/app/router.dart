@@ -13,6 +13,8 @@ import '../features/maintenance/presentation/screens/maintenance_list_screen.dar
 import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/vehicules/presentation/screens/add_vehicle_screen.dart';
 import '../features/vehicules/presentation/screens/edit_vehicle_screen.dart';
+import '../features/vehicules/presentation/screens/share_invitations_inbox_screen.dart';
+import '../features/vehicules/presentation/screens/share_vehicle_picker_screen.dart';
 import '../features/vehicules/presentation/screens/share_vehicle_screen.dart';
 import '../features/vehicules/presentation/screens/vehicle_detail_screen.dart';
 import '../features/vehicules/presentation/widgets/attachment_section.dart';
@@ -196,7 +198,29 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/vehicles/share',
         builder: (context, state) {
-          return SharedVehiclesListScreen();
+          final vehicle = state.extra as Vehicle?;
+          if (vehicle == null) {
+            return const Scaffold(
+              body: Center(
+                child: Text(
+                  'Sélectionnez un véhicule pour le partager.',
+                ),
+              ),
+            );
+          }
+          return ShareVehiclePickerScreen(vehicle: vehicle);
+        },
+      ),
+      GoRoute(
+        path: '/vehicles/shared',
+        builder: (context, state) {
+          return const SharedVehiclesListScreen();
+        },
+      ),
+      GoRoute(
+        path: '/vehicles/invitations',
+        builder: (context, state) {
+          return const ShareInvitationsInboxScreen();
         },
       ),
     ],

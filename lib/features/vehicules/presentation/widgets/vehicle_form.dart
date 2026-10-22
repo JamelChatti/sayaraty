@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/car_brands.dart';
+import '../../domain/models/vehicule_model.dart';
 
 class VehicleForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
@@ -11,6 +12,10 @@ class VehicleForm extends StatelessWidget {
   final TextEditingController yearController;
   final TextEditingController mileageController;
   final TextEditingController vinController;
+  final VehiclePowertrain? powertrain;
+  final VehicleFuelType? fuelType;
+  final ValueChanged<VehiclePowertrain?> onPowertrainChanged;
+  final ValueChanged<VehicleFuelType?> onFuelTypeChanged;
   final DateTime? dpmc;
   final DateTime? insuranceExpiry;
   final DateTime? inspectionExpiry;
@@ -29,6 +34,10 @@ class VehicleForm extends StatelessWidget {
     required this.yearController,
     required this.mileageController,
     required this.vinController,
+    required this.powertrain,
+    required this.fuelType,
+    required this.onPowertrainChanged,
+    required this.onFuelTypeChanged,
     this.dpmc,
     this.insuranceExpiry,
     this.inspectionExpiry,
@@ -151,6 +160,53 @@ class VehicleForm extends StatelessWidget {
               hintText: 'ex: 15000',
             ),
           ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<VehiclePowertrain>(
+            key: ValueKey('powertrain_${powertrain?.name}'),
+            initialValue: powertrain,
+            decoration: const InputDecoration(
+              labelText: 'Motorisation *',
+              border: OutlineInputBorder(),
+            ),
+            items: VehiclePowertrain.values
+                .map(
+                  (p) => DropdownMenuItem(
+                    value: p,
+                    child: Text(p.label),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              onPowertrainChanged(value);
+              if (value == VehiclePowertrain.electric) {
+                onFuelTypeChanged(null);
+              }
+            },
+            validator: (value) =>
+                value == null ? 'Choisissez la motorisation' : null,
+          ),
+          if (powertrain != null && powertrain!.needsFuelType) ...[
+            const SizedBox(height: 16),
+            DropdownButtonFormField<VehicleFuelType>(
+              key: ValueKey('fuel_${powertrain?.name}_${fuelType?.name}'),
+              initialValue: fuelType,
+              decoration: const InputDecoration(
+                labelText: 'Type de carburant *',
+                border: OutlineInputBorder(),
+              ),
+              items: VehicleFuelType.values
+                  .map(
+                    (f) => DropdownMenuItem(
+                      value: f,
+                      child: Text(f.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: onFuelTypeChanged,
+              validator: (value) =>
+                  value == null ? 'Choisissez essence ou diesel' : null,
+            ),
+          ],
           _buildDateSection(
             context,
             title: 'DPMC',

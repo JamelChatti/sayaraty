@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../auth/domain/models/user_model.dart';
 import '../../../../core/security/password_confirm_dialog.dart';
+import '../../application/share_invitation_service.dart';
 import '../../application/vehicle_expiry_notification_service.dart';
 import '../../application/vehicle_providers.dart';
 import '../../application/vehicle_service.dart' hide vehiclesStreamProvider;
@@ -63,6 +64,34 @@ class _VehicleListBodyState extends ConsumerState<_VehicleListBody> {
       },
       fireImmediately: true,
     );
+    ref.listenManual(
+      pendingShareInvitationsProvider(widget.userId),
+      (previous, next) {
+        final invites = next.asData?.value;
+        if (invites == null || invites.isEmpty) return;
+        final prevIds =
+            previous?.asData?.value.map((e) => e.id).toSet() ?? {};
+        // Première charge : mémoriser sans spammer; ensuite notifier les nouvelles.
+        if (previous == null) {
+          ShareInvitationNotifier.instance.markSeen(invites.map((e) => e.id));
+          return;
+        }
+        final fresh = invites.where((i) => !prevIds.contains(i.id)).toList();
+        if (fresh.isNotEmpty) {
+          ShareInvitationNotifier.instance.notifyNewInvitations(fresh);
+        }
+      },
+      fireImmediately: true,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = ref.read(authStateNotifierProvider).asData?.value;
+      if (auth == null) return;
+      await ref.read(shareInvitationServiceProvider).claimPendingInvitations(
+            userId: auth.uid,
+            email: auth.email,
+          );
+    });
   }
 
   Future<void> _showDeleteDialog(String vehicleId) async {
@@ -89,6 +118,9 @@ class _VehicleListBodyState extends ConsumerState<_VehicleListBody> {
   @override
   Widget build(BuildContext context) {
     final vehiclesAsync = ref.watch(vehiclesStreamProvider(widget.userId));
+    final pendingInvites =
+        ref.watch(pendingShareInvitationsProvider(widget.userId)).asData?.value ??
+            const [];
 
     return vehiclesAsync.when(
       loading: () =>
@@ -115,6 +147,15 @@ class _VehicleListBodyState extends ConsumerState<_VehicleListBody> {
             ),
             actions: [
               IconButton(
+                icon: Badge(
+                  isLabelVisible: pendingInvites.isNotEmpty,
+                  label: Text('${pendingInvites.length}'),
+                  child: const Icon(Icons.mail_outline),
+                ),
+                tooltip: 'Invitations de partage',
+                onPressed: () => context.push('/vehicles/invitations'),
+              ),
+              IconButton(
                 icon: const Icon(Icons.settings),
                 onPressed: () => context.push('/settings'),
               ),
@@ -126,9 +167,8 @@ class _VehicleListBodyState extends ConsumerState<_VehicleListBody> {
                 icon: const Icon(
                   Icons.group,
                   color: Colors.green,
-                ), // Icône pour la famille/entreprise
-                onPressed: () =>
-                    context.push('/vehicles/share'), // Route à définir
+                ),
+                onPressed: () => context.push('/vehicles/shared'),
               ),
             ],
           ),
@@ -137,15 +177,25 @@ class _VehicleListBodyState extends ConsumerState<_VehicleListBody> {
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.directions_car, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text(
+                    children: [
+                      if (pendingInvites.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _PendingInvitesBanner(
+                            count: pendingInvites.length,
+                            onTap: () =>
+                                context.push('/vehicles/invitations'),
+                          ),
+                        ),
+                      ],
+                      const Icon(Icons.directions_car, size: 64, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      const Text(
                         'Aucun véhicule',
                         style: TextStyle(fontSize: 18, color: Colors.grey),
                       ),
-                      SizedBox(height: 8),
-                      Text(
+                      const SizedBox(height: 8),
+                      const Text(
                         'Ajoutez votre premier véhicule pour commencer à suivre son entretien.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey),
@@ -154,9 +204,21 @@ class _VehicleListBodyState extends ConsumerState<_VehicleListBody> {
                   ),
                 )
               : ListView.builder(
-                  itemCount: vehicles.length,
+                  itemCount:
+                      vehicles.length + (pendingInvites.isNotEmpty ? 1 : 0),
                   itemBuilder: (context, index) {
-                    final vehicle = vehicles[index];
+                    if (pendingInvites.isNotEmpty && index == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                        child: _PendingInvitesBanner(
+                          count: pendingInvites.length,
+                          onTap: () => context.push('/vehicles/invitations'),
+                        ),
+                      );
+                    }
+
+                    final vehicle = vehicles[
+                        pendingInvites.isNotEmpty ? index - 1 : index];
                     final title = '${vehicle.brand} ${vehicle.model}';
                     final subtitle =
                         vehicle.plateNumber ?? 'Immatriculation inconnue';
@@ -343,6 +405,49 @@ class _VehicleListBodyState extends ConsumerState<_VehicleListBody> {
                 ),
         );
       },
+    );
+  }
+}
+
+class _PendingInvitesBanner extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _PendingInvitesBanner({
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.teal.shade50,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(Icons.mail, color: Colors.teal.shade700),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  count == 1
+                      ? '1 invitation de partage à accepter'
+                      : '$count invitations de partage à accepter',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.teal.shade900,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.teal.shade700),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

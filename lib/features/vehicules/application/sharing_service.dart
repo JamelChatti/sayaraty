@@ -388,12 +388,21 @@ class SharingService {
     String? displayName,
   }) async {
     try {
-      // 1. Trouver l'utilisateur par email
-      final userSnapshot = await _firestore
+      // 1. Trouver l'utilisateur par email (normalisé + tel quel)
+      final normalizedEmail = userEmail.trim().toLowerCase();
+      var userSnapshot = await _firestore
           .collection('users')
-          .where('email', isEqualTo: userEmail.toLowerCase())
+          .where('email', isEqualTo: normalizedEmail)
           .limit(1)
           .get();
+
+      if (userSnapshot.docs.isEmpty && userEmail.trim() != normalizedEmail) {
+        userSnapshot = await _firestore
+            .collection('users')
+            .where('email', isEqualTo: userEmail.trim())
+            .limit(1)
+            .get();
+      }
 
       if (userSnapshot.docs.isEmpty) {
         throw Exception('Utilisateur non trouvé');
@@ -437,7 +446,7 @@ class SharingService {
       final userData = targetUser.data();
       final sharedAccess = SharedAccess(
         userId: targetUser.id,
-        email: userEmail,
+        email: (userData['email'] as String?)?.toLowerCase() ?? normalizedEmail,
         displayName: displayName ?? userData['displayName'] ?? userData['name'],
         permissions: permissions,
         sharedAt: DateTime.now(),

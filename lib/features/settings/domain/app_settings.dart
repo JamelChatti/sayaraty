@@ -13,7 +13,7 @@ class AppSettings {
   const AppSettings({
     this.themeMode = ThemeModeEnum.system,
     this.language = LanguageEnum.fr,
-    this.currency = CurrencyEnum.dzd,
+    this.currency = CurrencyEnum.tnd,
   });
 
   Map<String, dynamic> toMap() => {
@@ -26,13 +26,21 @@ class AppSettings {
     return AppSettings(
       themeMode: _enumFromString(ThemeModeEnum.values, map['themeMode']),
       language: _enumFromString(LanguageEnum.values, map['language']),
-      currency: _enumFromString(CurrencyEnum.values, map['currency']),
+      currency: _enumFromString(
+        CurrencyEnum.values,
+        map['currency'],
+        fallback: CurrencyEnum.tnd,
+      ),
     );
   }
 
-  static T _enumFromString<T>(List<T> values, String? name) {
-    if (name == null) return values.first;
-    return values.firstWhere((v) => v.toString().split('.').last == name, orElse: () => values.first);
+  static T _enumFromString<T>(List<T> values, String? name, {T? fallback}) {
+    final defaultValue = fallback ?? values.first;
+    if (name == null) return defaultValue;
+    return values.firstWhere(
+      (v) => v.toString().split('.').last == name,
+      orElse: () => defaultValue,
+    );
   }
 }
 

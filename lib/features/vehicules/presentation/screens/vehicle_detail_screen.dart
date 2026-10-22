@@ -36,6 +36,15 @@ class VehicleDetailScreen extends ConsumerWidget {
               '${live.mileage!.toStringAsFixed(0)} km',
             ),
           _buildDetailRow(
+            'Motorisation',
+            live.powertrain?.label ?? 'Non définie',
+          ),
+          if (live.powertrain != null && live.powertrain!.needsFuelType)
+            _buildDetailRow(
+              'Carburant',
+              live.fuelType?.label ?? 'Non défini',
+            ),
+          _buildDetailRow(
             'DPMC',
             live.dpmc != null
                 ? DateFormat('dd/MM/yyyy').format(live.dpmc!)
@@ -70,7 +79,7 @@ class VehicleDetailScreen extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () => context.push('/vehicles/share', extra: live),
-            child: const Text('Partager avec un pro'),
+            child: const Text('Partager'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(),

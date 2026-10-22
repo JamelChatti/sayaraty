@@ -46,6 +46,10 @@ class _AddMaintenanceScreenState extends ConsumerState<AddMaintenanceScreen> {
   DateTime _selectedDate = DateTime.now();
   double _selectedMileage = 0;
   List<MaintenanceItem> _items = MaintenanceLineCatalog.presets();
+  Map<String, LineItemDefaults> _lastDefaults = const {};
+  int _editorEpoch = 0;
+  bool _saving = false;
+  bool _lastPricesLoaded = false;
 
   @override
   void initState() {
@@ -55,6 +59,28 @@ class _AddMaintenanceScreenState extends ConsumerState<AddMaintenanceScreen> {
     _garageNameController = TextEditingController();
     _garageContactController = TextEditingController();
     _mileageController = TextEditingController(text: '0');
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadLastPrices());
+  }
+
+  Future<void> _loadLastPrices() async {
+    if (_lastPricesLoaded) return;
+    try {
+      final history = await ref
+          .read(maintenanceServiceProvider)
+          .fetchMaintenancesForVehicle(widget.vehicleId);
+      if (!mounted) return;
+      final defaults =
+          MaintenanceLineCatalog.lastDefaultsFromHistory(history);
+      setState(() {
+        _lastDefaults = defaults;
+        _items = MaintenanceLineCatalog.applyLastDefaults(_items, defaults);
+        _lastPricesLoaded = true;
+        _editorEpoch++;
+      });
+    } catch (e, st) {
+      debugPrint('Derniers prix introuvables: $e\n$st');
+      if (mounted) setState(() => _lastPricesLoaded = true);
+    }
   }
 
   @override
@@ -97,6 +123,7 @@ class _AddMaintenanceScreenState extends ConsumerState<AddMaintenanceScreen> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final user = ref.read(authStateNotifierProvider).asData?.value;
     if (!_formKey.currentState!.validate() || user == null) return;
 
@@ -137,6 +164,8 @@ class _AddMaintenanceScreenState extends ConsumerState<AddMaintenanceScreen> {
       createdAt: DateTime.now(),
       status: MaintenanceStatus.completed,
     );
+
+    setState(() => _saving = true);
 
     try {
       await ref.read(maintenanceServiceProvider).addMaintenanceWithPermissionCheck(
@@ -179,6 +208,7 @@ class _AddMaintenanceScreenState extends ConsumerState<AddMaintenanceScreen> {
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
+      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur : $e')),
       );
@@ -255,11 +285,13 @@ class _AddMaintenanceScreenState extends ConsumerState<AddMaintenanceScreen> {
             ),
             const SizedBox(height: 16),
             MaintenanceLineItemsEditor(
+              key: ValueKey('lines_$_editorEpoch'),
               items: _items,
               currency: currency,
               currentMileage: _selectedMileage,
               interventionDate: _selectedDate,
               dpmc: vehicle?.dpmc,
+              lastDefaults: _lastDefaults,
               onChanged: (next) {
                 setState(() {
                   _items = next;
@@ -309,7 +341,7 @@ class _AddMaintenanceScreenState extends ConsumerState<AddMaintenanceScreen> {
       floatingActionButton: FloatingActionButton.extended(
         label: const Text('Enregistrer'),
         icon: const Icon(Icons.check),
-        onPressed: _save,
+        onPressed: _saving ? null : _save,
       ),
     );
   }

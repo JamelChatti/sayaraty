@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../settings/domain/app_settings.dart';
 import '../../domain/estimate_next_due_date.dart';
+import '../../domain/maintenance_line_catalog.dart';
 import '../../domain/models/maintenance_item.dart';
 
 /// Liste extensible d'éléments d'entretien (prix, qté, TVA, marque, prochain km/date).
@@ -13,6 +14,7 @@ class MaintenanceLineItemsEditor extends StatelessWidget {
   final double currentMileage;
   final DateTime interventionDate;
   final DateTime? dpmc;
+  final Map<String, LineItemDefaults> lastDefaults;
   final ValueChanged<List<MaintenanceItem>> onChanged;
 
   const MaintenanceLineItemsEditor({
@@ -22,8 +24,20 @@ class MaintenanceLineItemsEditor extends StatelessWidget {
     required this.currentMileage,
     required this.interventionDate,
     required this.dpmc,
+    this.lastDefaults = const {},
     required this.onChanged,
   });
+
+  MaintenanceItem _withLastPriceIfEmpty(MaintenanceItem item) {
+    if (item.price > 0 || lastDefaults.isEmpty) return item;
+    final d = MaintenanceLineCatalog.lookupDefaults(item, lastDefaults);
+    if (d == null) return item;
+    return item.copyWith(
+      price: d.price,
+      taxRate: item.category == 'fuel' ? item.taxRate : d.taxRate,
+      brand: (item.brand == null || item.brand!.isEmpty) ? d.brand : item.brand,
+    );
+  }
 
   void _update(int index, MaintenanceItem item) {
     final next = List<MaintenanceItem>.from(items);
@@ -81,10 +95,14 @@ class MaintenanceLineItemsEditor extends StatelessWidget {
                     children: [
                       Checkbox(
                         value: item.isSelected,
-                        onChanged: (v) => _update(
-                          i,
-                          item.copyWith(isSelected: v ?? false),
-                        ),
+                        onChanged: (v) {
+                          final selected = v ?? false;
+                          var updated = item.copyWith(isSelected: selected);
+                          if (selected) {
+                            updated = _withLastPriceIfEmpty(updated);
+                          }
+                          _update(i, updated);
+                        },
                       ),
                       Expanded(
                         child: isCustom
@@ -95,8 +113,13 @@ class MaintenanceLineItemsEditor extends StatelessWidget {
                                   isDense: true,
                                   border: OutlineInputBorder(),
                                 ),
-                                onChanged: (v) =>
-                                    _update(i, item.copyWith(name: v)),
+                                onChanged: (v) {
+                                  var updated = item.copyWith(name: v);
+                                  if (item.price <= 0) {
+                                    updated = _withLastPriceIfEmpty(updated);
+                                  }
+                                  _update(i, updated);
+                                },
                               )
                             : Text(
                                 item.name,
@@ -120,6 +143,9 @@ class MaintenanceLineItemsEditor extends StatelessWidget {
                         Expanded(
                           flex: 2,
                           child: TextFormField(
+                            key: ValueKey(
+                              'price_${i}_${item.category}_${item.name}',
+                            ),
                             initialValue: item.price == 0
                                 ? ''
                                 : formatMoneyForInput(item.price, currency),
@@ -127,6 +153,17 @@ class MaintenanceLineItemsEditor extends StatelessWidget {
                               labelText: isFuel ? 'Prix / L' : 'Prix HT',
                               isDense: true,
                               suffixText: symbol,
+                              helperText: () {
+                                final d = MaintenanceLineCatalog.lookupDefaults(
+                                  item,
+                                  lastDefaults,
+                                );
+                                if (d != null && item.price == d.price) {
+                                  return 'Dernier prix (modifiable)';
+                                }
+                                return null;
+                              }(),
+                              helperMaxLines: 1,
                             ),
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,

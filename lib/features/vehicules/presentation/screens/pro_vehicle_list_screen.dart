@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../auth/domain/models/user_model.dart';
+import '../../application/share_invitation_service.dart';
 import '../../application/vehicle_service.dart';
 
 import '../../domain/models/shared_access_model.dart';
@@ -61,7 +62,19 @@ class _ProVehicleListScreenState extends ConsumerState<ProVehicleListScreen> {
           print('🔍 Pro user role: ${user.role}');
           print('🔍 Pro user email: ${user.email}');
           _isFirstLoad = false;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(shareInvitationServiceProvider).claimPendingInvitations(
+                  userId: user.uid,
+                  email: user.email,
+                );
+          });
         }
+
+        final pendingInvites = ref
+                .watch(pendingShareInvitationsProvider(user.uid))
+                .asData
+                ?.value ??
+            const [];
 
         // 1. VERSION AVEC LE PROVIDER (recommandée)
         final vehiclesAsync = ref.watch(sharedVehiclesStreamProvider(user.uid));
@@ -153,6 +166,15 @@ class _ProVehicleListScreenState extends ConsumerState<ProVehicleListScreen> {
                   )
                       : const SizedBox(),
                   IconButton(
+                    icon: Badge(
+                      isLabelVisible: pendingInvites.isNotEmpty,
+                      label: Text('${pendingInvites.length}'),
+                      child: const Icon(Icons.mail_outline),
+                    ),
+                    tooltip: 'Invitations de partage',
+                    onPressed: () => context.push('/vehicles/invitations'),
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.refresh),
                     onPressed: () {
                       ref.invalidate(sharedVehiclesStreamProvider(user.uid));
@@ -165,8 +187,21 @@ class _ProVehicleListScreenState extends ConsumerState<ProVehicleListScreen> {
                 ],
               ),
               body: vehicles.isEmpty
-                  ? _buildEmptyState(context, user.uid)
-                  : _buildVehicleList(context, vehicles),
+                  ? _buildEmptyState(
+                      context,
+                      user.uid,
+                      pendingCount: pendingInvites.length,
+                    )
+                  : Column(
+                      children: [
+                        if (pendingInvites.isNotEmpty)
+                          _PendingInviteBanner(
+                            count: pendingInvites.length,
+                            onTap: () => context.push('/vehicles/invitations'),
+                          ),
+                        Expanded(child: _buildVehicleList(context, vehicles)),
+                      ],
+                    ),
               floatingActionButton: vehicles.isNotEmpty
                   ? FloatingActionButton(
                 onPressed: () => _showDebugInfo(context, vehicles, user.uid),
@@ -180,7 +215,11 @@ class _ProVehicleListScreenState extends ConsumerState<ProVehicleListScreen> {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, String userId) {
+  Widget _buildEmptyState(
+    BuildContext context,
+    String userId, {
+    int pendingCount = 0,
+  }) {
     return Center(
       child: SingleChildScrollView(
         child: Padding(
@@ -216,6 +255,13 @@ class _ProVehicleListScreenState extends ConsumerState<ProVehicleListScreen> {
                 ),
               ),
               const SizedBox(height: 32),
+              if (pendingCount > 0) ...[
+                _PendingInviteBanner(
+                  count: pendingCount,
+                  onTap: () => context.push('/vehicles/invitations'),
+                ),
+                const SizedBox(height: 16),
+              ],
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -230,12 +276,22 @@ class _ProVehicleListScreenState extends ConsumerState<ProVehicleListScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _buildInstructionStep(1, 'Ouvrir l\'application Sayaraty'),
-                      _buildInstructionStep(2, 'Aller dans "Mes véhicules"'),
-                      _buildInstructionStep(3, 'Sélectionner un véhicule'),
-                      _buildInstructionStep(4, 'Cliquer sur "Partager"'),
-                      _buildInstructionStep(5, 'Chercher votre email professionnel'),
-                      _buildInstructionStep(6, 'Sélectionner les permissions et valider'),
+                      _buildInstructionStep(
+                        1,
+                        'Le propriétaire ouvre le véhicule puis « Partager »',
+                      ),
+                      _buildInstructionStep(
+                        2,
+                        'Il cherche votre email Sayaraty et envoie l\'invitation',
+                      ),
+                      _buildInstructionStep(
+                        3,
+                        'Vous acceptez l\'invitation (icône enveloppe)',
+                      ),
+                      _buildInstructionStep(
+                        4,
+                        'Le véhicule apparaît alors dans cette liste',
+                      ),
                     ],
                   ),
                 ),
@@ -583,6 +639,41 @@ class _ProVehicleListScreenState extends ConsumerState<ProVehicleListScreen> {
             child: const Text('Fermer'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PendingInviteBanner extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _PendingInviteBanner({
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Material(
+        color: Colors.teal.shade50,
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
+          onTap: onTap,
+          leading: Icon(Icons.mail, color: Colors.teal.shade800),
+          title: Text(
+            count == 1
+                ? '1 invitation à accepter'
+                : '$count invitations à accepter',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.teal.shade900,
+            ),
+          ),
+          trailing: Icon(Icons.chevron_right, color: Colors.teal.shade800),
+        ),
       ),
     );
   }

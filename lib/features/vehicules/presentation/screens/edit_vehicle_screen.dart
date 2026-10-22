@@ -59,6 +59,8 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
   DateTime? _insuranceExpiry;
   DateTime? _inspectionExpiry;
   DateTime? _taxExpiry;
+  VehiclePowertrain? _powertrain;
+  VehicleFuelType? _fuelType;
 
   @override
   void initState() {
@@ -76,6 +78,8 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
     _insuranceExpiry = v.insuranceExpiry;
     _inspectionExpiry = v.technicalInspectionExpiry;
     _taxExpiry = v.taxExpiry;
+    _powertrain = v.powertrain;
+    _fuelType = v.fuelType;
   }
 
   @override
@@ -143,6 +147,13 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
         yearController: _yearController,
         mileageController: _mileageController,
         vinController: _vinController,
+        powertrain: _powertrain,
+        fuelType: _fuelType,
+        onPowertrainChanged: (p) => setState(() {
+          _powertrain = p;
+          if (p == VehiclePowertrain.electric) _fuelType = null;
+        }),
+        onFuelTypeChanged: (f) => setState(() => _fuelType = f),
         dpmc: _dpmc,
         insuranceExpiry: _insuranceExpiry,
         inspectionExpiry: _inspectionExpiry,
@@ -188,6 +199,10 @@ class _EditVehicleFormState extends ConsumerState<_EditVehicleForm> {
               vin: _vinController.text.trim().isEmpty
                   ? null
                   : _vinController.text.trim(),
+              powertrain: _powertrain,
+              fuelType: _powertrain == VehiclePowertrain.electric
+                  ? null
+                  : _fuelType,
               dpmc: _dpmc,
               insuranceExpiry: _insuranceExpiry,
               technicalInspectionExpiry: _inspectionExpiry,

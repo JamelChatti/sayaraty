@@ -19,29 +19,29 @@ class HomeRedirector extends ConsumerWidget {
     return userAsync.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, stack) => Scaffold(body: Center(child: Text('Erreur: $err'))),
-      data: (user) { // ✅ Utilise "data", pas "(user)"
+      data: (user) {
         if (user == null) {
-
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) context.push('/select-role');
+            if (context.mounted) context.go('/login');
           });
-          return const SizedBox();
+          return const Scaffold(
+            body: Center(child: Text('Connexion requise')),
+          );
         }
 
-        // ✅ Retourne le bon écran en fonction du rôle
         switch (user.role) {
-          case 'owner':
-            return VehicleListScreen();
           case 'pro':
-            return ProVehicleListScreen();
+          case 'professional':
+            return const ProVehicleListScreen();
           case 'company_admin':
           case 'employee':
             return CompanyAdminHomeScreen(user: user);
+          case 'owner':
+          case 'user':
+          case null:
+          case '':
           default:
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (context.mounted) context.push('/login');
-            });
-            return const SizedBox();
+            return const VehicleListScreen();
         }
       },
     );

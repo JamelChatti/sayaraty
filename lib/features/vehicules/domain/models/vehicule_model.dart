@@ -3,6 +3,42 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'routine_maintenance.dart';
 import 'shared_access_model.dart';
 
+/// Motorisation du véhicule.
+enum VehiclePowertrain {
+  electric,
+  hybrid,
+  mechanical,
+}
+
+extension VehiclePowertrainX on VehiclePowertrain {
+  String get label {
+    switch (this) {
+      case VehiclePowertrain.electric:
+        return 'Électrique';
+      case VehiclePowertrain.hybrid:
+        return 'Hybride';
+      case VehiclePowertrain.mechanical:
+        return 'Mécanique';
+    }
+  }
+
+  bool get needsFuelType => this != VehiclePowertrain.electric;
+}
+
+/// Carburant (si non 100 % électrique).
+enum VehicleFuelType { petrol, diesel }
+
+extension VehicleFuelTypeX on VehicleFuelType {
+  String get label {
+    switch (this) {
+      case VehicleFuelType.petrol:
+        return 'Essence';
+      case VehicleFuelType.diesel:
+        return 'Diesel';
+    }
+  }
+}
+
 class Vehicle {
   final String id;
   final String userId;
@@ -17,6 +53,8 @@ class Vehicle {
   // Données techniques
   final int year;
   final double? mileage;
+  final VehiclePowertrain? powertrain;
+  final VehicleFuelType? fuelType;
 
   /// Date de première mise en circulation
   final DateTime? dpmc;
@@ -48,6 +86,8 @@ class Vehicle {
     this.vin,
     required this.year,
     this.mileage,
+    this.powertrain,
+    this.fuelType,
     this.dpmc,
     this.insuranceExpiry,
     this.technicalInspectionExpiry,
@@ -124,6 +164,8 @@ class Vehicle {
       vin: map['vin'] as String?,
       year: (year as num).toInt(),
       mileage: (map['mileage'] as num?)?.toDouble(),
+      powertrain: _powertrainFrom(map['powertrain']),
+      fuelType: _fuelTypeFrom(map['fuelType']),
       dpmc: toDate(map['dpmc'] ?? map['firstRegistrationDate']),
       insuranceExpiry: toDate(map['insuranceExpiry']),
       technicalInspectionExpiry: toDate(
@@ -145,6 +187,25 @@ class Vehicle {
     );
   }
 
+  static VehiclePowertrain? _powertrainFrom(dynamic value) {
+    if (value is! String) return null;
+    for (final e in VehiclePowertrain.values) {
+      if (e.name == value) return e;
+    }
+    return null;
+  }
+
+  static VehicleFuelType? _fuelTypeFrom(dynamic value) {
+    if (value is! String) return null;
+    if (value == 'essence' || value == 'gasoline') {
+      return VehicleFuelType.petrol;
+    }
+    for (final e in VehicleFuelType.values) {
+      if (e.name == value) return e;
+    }
+    return null;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
@@ -155,6 +216,8 @@ class Vehicle {
       'vin': vin,
       'year': year,
       'mileage': mileage,
+      'powertrain': powertrain?.name,
+      'fuelType': fuelType?.name,
       'dpmc': dpmc,
       'insuranceExpiry': insuranceExpiry,
       'technicalInspectionExpiry': technicalInspectionExpiry,
@@ -207,6 +270,8 @@ class Vehicle {
     String? vin,
     int? year,
     double? mileage,
+    Object? powertrain = _unset,
+    Object? fuelType = _unset,
     Object? dpmc = _unset,
     Object? insuranceExpiry = _unset,
     Object? technicalInspectionExpiry = _unset,
@@ -229,6 +294,12 @@ class Vehicle {
       vin: vin ?? this.vin,
       year: year ?? this.year,
       mileage: mileage ?? this.mileage,
+      powertrain: identical(powertrain, _unset)
+          ? this.powertrain
+          : powertrain as VehiclePowertrain?,
+      fuelType: identical(fuelType, _unset)
+          ? this.fuelType
+          : fuelType as VehicleFuelType?,
       dpmc: identical(dpmc, _unset) ? this.dpmc : dpmc as DateTime?,
       insuranceExpiry: identical(insuranceExpiry, _unset)
           ? this.insuranceExpiry

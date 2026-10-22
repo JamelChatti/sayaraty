@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/theme_provider.dart';
 import '../../application/settings_service.dart';
@@ -45,6 +46,16 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
 
   Future<void> _saveSettings() async {
     await ref.read(appSettingsProvider.notifier).save(_settings);
+  }
+
+  Future<void> _openWebPage(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir la page')),
+      );
+    }
   }
 
   ThemeMode _mapToThemeMode(ThemeModeEnum e) {
@@ -165,6 +176,25 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
           ),
 
           const Divider(),
+
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: const Text('Supprimer le compte'),
+            subtitle: const Text('Demander la suppression du compte et des données'),
+            onTap: () => _openWebPage(
+              context,
+              'https://jamelchatti.github.io/sayaraty/suppression-compte.html',
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('Règles de confidentialité'),
+            subtitle: const Text('Comment Sayaraty traite vos données'),
+            onTap: () => _openWebPage(
+              context,
+              'https://jamelchatti.github.io/sayaraty/privacy.html',
+            ),
+          ),
 
           // 🔐 Déconnexion
           ListTile(

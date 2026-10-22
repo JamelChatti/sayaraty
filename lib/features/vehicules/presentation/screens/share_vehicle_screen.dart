@@ -775,6 +775,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../auth/application/auth_state_notifier.dart';
 import '../../../auth/domain/models/user_model.dart';
+import '../../application/share_invitation_service.dart';
 import '../../application/vehicle_providers.dart';
 import '../../domain/models/vehicule_model.dart';
 
@@ -808,13 +809,30 @@ class _SharedVehiclesListScreenState extends ConsumerState<SharedVehiclesListScr
 
         final vehiclesAsync = ref.watch(vehiclesSharedWithMeProvider(user.uid));
 
+        final pendingCount = ref
+                .watch(pendingShareInvitationsProvider(user.uid))
+                .asData
+                ?.value
+                .length ??
+            0;
+
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Véhicules clients'),
+            title: const Text('Véhicules partagés'),
             actions: [
               IconButton(
+                icon: Badge(
+                  isLabelVisible: pendingCount > 0,
+                  label: Text('$pendingCount'),
+                  child: const Icon(Icons.mail_outline),
+                ),
+                tooltip: 'Invitations',
+                onPressed: () => context.push('/vehicles/invitations'),
+              ),
+              IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: () => ref.invalidate(vehiclesSharedWithMeProvider(user.uid)),
+                onPressed: () =>
+                    ref.invalidate(vehiclesSharedWithMeProvider(user.uid)),
               ),
             ],
           ),
@@ -829,7 +847,8 @@ class _SharedVehiclesListScreenState extends ConsumerState<SharedVehiclesListScr
                   Text('Erreur: $err'),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => ref.invalidate(sharedVehiclesStreamProvider(user.uid)),
+                    onPressed: () =>
+                        ref.invalidate(sharedVehiclesStreamProvider(user.uid)),
                     child: const Text('Réessayer'),
                   ),
                 ],
@@ -841,6 +860,26 @@ class _SharedVehiclesListScreenState extends ConsumerState<SharedVehiclesListScr
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      if (pendingCount > 0) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: ListTile(
+                            tileColor: Colors.teal.shade50,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            leading: const Icon(Icons.mail),
+                            title: Text(
+                              pendingCount == 1
+                                  ? '1 invitation à accepter'
+                                  : '$pendingCount invitations à accepter',
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () =>
+                                context.push('/vehicles/invitations'),
+                          ),
+                        ),
+                      ],
                       const Icon(
                         Icons.directions_car,
                         size: 64,
@@ -853,7 +892,8 @@ class _SharedVehiclesListScreenState extends ConsumerState<SharedVehiclesListScr
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Les propriétaires de véhicules peuvent vous partager\nleurs véhicules depuis l\'application.',
+                        'Acceptez une invitation de partage pour voir\n'
+                        'le véhicule ici.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey[600]),
                       ),
@@ -863,9 +903,29 @@ class _SharedVehiclesListScreenState extends ConsumerState<SharedVehiclesListScr
               }
 
               return ListView.builder(
-                itemCount: vehicles.length,
+                itemCount: vehicles.length + (pendingCount > 0 ? 1 : 0),
                 itemBuilder: (context, index) {
-                  final vehicle = vehicles[index];
+                  if (pendingCount > 0 && index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: ListTile(
+                        tileColor: Colors.teal.shade50,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        leading: const Icon(Icons.mail),
+                        title: Text(
+                          pendingCount == 1
+                              ? '1 invitation à accepter'
+                              : '$pendingCount invitations à accepter',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push('/vehicles/invitations'),
+                      ),
+                    );
+                  }
+                  final vehicle =
+                      vehicles[pendingCount > 0 ? index - 1 : index];
                   return _buildVehicleCard(context, vehicle);
                 },
               );

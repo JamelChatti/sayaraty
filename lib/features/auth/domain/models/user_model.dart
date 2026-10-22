@@ -18,24 +18,27 @@ class AppUser extends Equatable {
   });
 
   factory AppUser.fromMap(Map<String, dynamic> map) {
-    final uid = map['uid'];
-    final email = map['email'];
-
-    if (uid == null) {
+    final uid = _asString(map['uid']);
+    if (uid == null || uid.isEmpty) {
       throw Exception('Champ "uid" manquant dans le document utilisateur');
-    }
-    if (email == null) {
-      throw Exception('Champ "email" manquant dans le document utilisateur');
     }
 
     return AppUser(
-      uid: uid as String,
-      email: email as String,
-      name: map['name'] as String?,
-      role: map['role'] as String?, // ✅ pas de ?? '' si vous gardez role nullable
-      companyId: map['companyId'] as String?,
-      userType: map['userType']  as String?,
+      uid: uid,
+      email: _asString(map['email']) ?? '',
+      name: _asString(map['name']) ?? _asString(map['displayName']),
+      role: _asString(map['role']),
+      companyId: _asString(map['companyId']),
+      userType: _asString(map['userType']),
     );
+  }
+
+  static String? _asString(dynamic value) {
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    return null;
   }
 
   Map<String, dynamic> toMap() {

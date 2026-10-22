@@ -117,8 +117,8 @@ class MaintenanceService {
         });
   }
 
-  /// Entretiens ayant une date de prochain rappel (`nextDueDate`).
-  Future<List<Maintenance>> fetchMaintenancesWithNextDue(
+  /// Toutes les interventions d'un véhicule (lecture ponctuelle).
+  Future<List<Maintenance>> fetchMaintenancesForVehicle(
     String vehicleId,
   ) async {
     final snapshot = await _firestore
@@ -126,12 +126,21 @@ class MaintenanceService {
         .where('vehicleId', isEqualTo: vehicleId)
         .get();
 
-    return snapshot.docs
-        .map((doc) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          return Maintenance.fromMap(data);
-        })
+    final list = snapshot.docs.map((doc) {
+      final data = doc.data();
+      data['id'] = doc.id;
+      return Maintenance.fromMap(data);
+    }).toList();
+    list.sort((a, b) => b.date.compareTo(a.date));
+    return list;
+  }
+
+  /// Entretiens ayant une date de prochain rappel (`nextDueDate`).
+  Future<List<Maintenance>> fetchMaintenancesWithNextDue(
+    String vehicleId,
+  ) async {
+    final list = await fetchMaintenancesForVehicle(vehicleId);
+    return list
         .where(
           (m) =>
               m.nextDueDate != null ||
